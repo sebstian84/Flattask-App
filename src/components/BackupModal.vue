@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { Download, Upload, X, RotateCcw, Archive, Clock } from 'lucide-vue-next'
+import { Download, Upload, X, RotateCcw, Archive, Clock, Trash2 } from 'lucide-vue-next'
 
 const props = defineProps({
   show: Boolean,
@@ -178,6 +178,44 @@ const undoChange = async (change) => {
     undoInProgress.value[change.id] = false
   }
 }
+
+const deleteFromArchive = async (id) => {
+  if (!confirm('Möchten Sie diesen Eintrag wirklich endgültig aus dem Archiv löschen?')) return
+  try {
+    const archive = [...archivedTodos.value]
+    const todoIndex = archive.findIndex(t => t.id === id)
+    if (todoIndex === -1) return
+    archive.splice(todoIndex, 1)
+    await axios.post(`${API_URL}/archive`, { archivedTodos: archive })
+    message.value = 'Eintrag endgültig gelöscht.'
+    messageType.value = 'success'
+    await fetchArchive()
+  } catch (err) {
+    message.value = 'Fehler beim Löschen aus dem Archiv.'
+    messageType.value = 'error'
+  }
+}
+
+const deleteFromHistory = async (change) => {
+  if (!confirm('Möchten Sie diesen Historien-Eintrag wirklich endgültig löschen?')) return
+  try {
+    const response = await axios.post(`${API_URL}/changelog/delete`, { 
+      todoId: change.todoId, 
+      changeId: change.id 
+    })
+    if (response.data.success) {
+      message.value = `Eintrag endgültig gelöscht.`
+      messageType.value = 'success'
+      await fetchChangelog()
+    } else {
+      message.value = `❌ ${response.data.message || 'Fehler beim Löschen'}`
+      messageType.value = 'error'
+    }
+  } catch (error) {
+    message.value = `❌ Fehler: ${error.message}`
+    messageType.value = 'error'
+  }
+}
 </script>
 
 <template>
@@ -233,11 +271,17 @@ const undoChange = async (change) => {
                 <strong>{{ todo.name }}</strong>
                 <div class="archive-meta">Archiviert am: {{ new Date(todo.id).toLocaleDateString() }}</div>
               </div>
-              <button class="pure-button mini-btn" @click="reviveFromArchive(todo.id)" title="Wiederherstellen">
-                <RotateCcw :size="14" />
-              </button>
+              <div class="action-buttons">
+                <button class="pure-button mini-btn" @click="reviveFromArchive(todo.id)" title="Wiederherstellen">
+                  <RotateCcw :size="14" />
+                </button>
+                <button class="pure-button mini-btn danger-btn" @click="deleteFromArchive(todo.id)" title="Endgültig löschen">
+                  <Trash2 :size="14" />
+                </button>
+              </div>
             </div>
           </div>
+
         </div>
 
         <div v-show="activeTab === 'history'" class="tab-content history-tab">
@@ -251,10 +295,16 @@ const undoChange = async (change) => {
                 </div>
                 <div class="changelog-summary">{{ getChangeDescription(change) }}</div>
               </div>
-              <button class="undo-btn" @click.stop="undoChange(change)" :disabled="undoInProgress[change.id]">
-                <RotateCcw :size="14" />
-              </button>
+              <div class="action-buttons">
+                <button class="undo-btn" @click.stop="undoChange(change)" :disabled="undoInProgress[change.id]" title="Rückgängig">
+                  <RotateCcw :size="14" />
+                </button>
+                <button class="undo-btn danger-btn" @click.stop="deleteFromHistory(change)" title="Eintrag löschen">
+                  <Trash2 :size="14" />
+                </button>
+              </div>
             </div>
+
           </div>
         </div>
       </div>
@@ -312,7 +362,10 @@ const undoChange = async (change) => {
 .action-badge { font-size: 0.7rem; font-weight: 600; padding: 0.1rem 0.4rem; border-radius: 1rem; background: #f3f4f6; color: #4b5563; }
 .changelog-date { font-size: 0.75rem; color: #9ca3af; }
 .changelog-summary { font-size: 0.875rem; color: #374151; font-weight: 500; }
+.action-buttons { display: flex; gap: 0.25rem; align-items: center; }
 .undo-btn { background: none; border: none; color: #9ca3af; cursor: pointer; padding: 0.5rem; border-radius: 0.375rem; }
-.undo-btn:hover { background: #fef2f2; color: #ef4444; }
+.undo-btn:hover { background: #fef2f2; color: #2563eb; }
+.danger-btn { color: #ef4444; }
+.danger-btn:hover { background: #fef2f2 !important; color: #dc2626 !important; border-color: #fecaca !important; }
 .empty-state { text-align: center; color: #9ca3af; padding: 2rem; font-style: italic; }
 </style>

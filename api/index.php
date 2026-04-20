@@ -268,6 +268,27 @@ elseif ($path === '/changelog' && $method === 'GET') {
 elseif ($path === '/changelog/undo' && $method === 'POST') {
     echo json_encode(['success' => true]);
 }
+elseif ($path === '/changelog/delete' && $method === 'POST') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!isset($input['todoId']) || !isset($input['changeId'])) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Missing todoId or changeId']);
+        exit;
+    }
+    $changes = read_secure_file('changelog.json') ?: ['changes' => []];
+    $todoId = $input['todoId'];
+    $changeId = $input['changeId'];
+    if (isset($changes['changes'][$todoId])) {
+        $filtered = array_filter($changes['changes'][$todoId], function($c) use ($changeId) {
+            return $c['id'] !== $changeId;
+        });
+        $changes['changes'][$todoId] = array_values($filtered);
+        write_secure_file('changelog.json', $changes);
+        echo json_encode(['success' => true]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Change not found']);
+    }
+}
 else {
     http_response_code(404);
 }
