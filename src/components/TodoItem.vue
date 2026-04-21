@@ -101,17 +101,6 @@ const cancelDelete = () => {
   isConfirmingDelete.value = false
 }
 
-const openPicker = (id) => {
-  if (props.isArchive) return;
-  const el = document.getElementById('date-' + id);
-  if (el && el.showPicker) {
-    try {
-      el.showPicker();
-    } catch (e) {
-      console.warn('showPicker not supported or failed', e);
-    }
-  }
-}
 </script>
 
 <template>
@@ -136,7 +125,7 @@ const openPicker = (id) => {
               </div>
               <input v-else v-model="tagInput" class="mini-input inline-tag-input" @keyup.enter="saveTags" @keyup.esc="cancelTags" @blur="saveTags" placeholder="Tag1, Tag2" autofocus @click.stop />
               
-              <div class="inline-date-picker" @click.stop="openPicker(todo.id)" title="Datum bearbeiten">
+              <div class="inline-date-picker" title="Datum bearbeiten">
                 <label class="badge date-badge editable-text" :class="{ 'no-date': !todo.targetDate }">
                   <Calendar :size="8" /> {{ formatDate(todo.targetDate) }}
                 </label>
@@ -201,7 +190,7 @@ const openPicker = (id) => {
 .date-badge.no-date { background: #f9fafb; color: #9ca3af; border: 1px dashed #e5e7eb; }
 
 .inline-date-picker { position: relative; display: flex; align-items: center; cursor: pointer; }
-.hidden-date-input { position: absolute; visibility: hidden; width: 0; height: 0; }
+.hidden-date-input { position: absolute; opacity: 0; top: 0; left: 0; width: 100%; height: 100%; cursor: pointer; }
 
 .actions { display: flex; gap: 0.1rem; }
 .btn-icon.small { padding: 0.2rem; border-radius: 2rem !important; min-width: 1.5rem; height: 1.5rem; display: flex; justify-content: center; align-items: center; background: transparent; color: #9ca3af; }

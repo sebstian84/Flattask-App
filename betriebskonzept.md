@@ -59,14 +59,14 @@ Um die sensiblen Daten in den JSON-Dateien zu schützen, implementiert das Backe
 
 ## 6. Monitoring, Logging & Wartung
 
-### 6.1 Application Logging
-Änderungen an Todos (Erstellen, Updaten, Löschen, Wiederherstellen) werden programmatisch in der `changelog.json` protokolliert. Dies dient dem fachlichen Audit-Trail. Die Datenstruktur speichert exakt, welche Felder sich wie verändert haben, und erlaubt ein gezieltes Rückgängigmachen oder Löschen einzelner Historien-Einträge über die UI.
+### 6.1 Application Logging & Datenkonsistenz
+Änderungen an Todos (Erstellen, Updaten, Löschen, Wiederherstellen) werden programmatisch in der `changelog.json` protokolliert. Dies dient dem fachlichen Audit-Trail. Die Datenstruktur speichert exakt, welche Felder sich wie verändert haben, und erlaubt ein gezieltes Rückgängigmachen (Undo) einzelner Historien-Einträge. Zur Wahrung der Datenkonsistenz beim Undo-Prozess wird ein striktes Type-Casting für Identifier implementiert (String-Vergleiche der IDs), um Duplizierungs-Fehler zu vermeiden.
 
 ### 6.2 Backup-Strategie
 - **Manuell über UI:** Der Benutzer kann über die Oberfläche ein vollständiges Backup im JSON-Format herunterladen (und wieder importieren).
 - **Serverseitig:** Da alle Daten in `api/data/` liegen, genügt ein einfaches, regelmäßiges Datei-Backup dieses Ordners mittels Cronjob (z. B. rsync oder tar). Datenbank-Dumps entfallen komplett.
 
 ## 7. Skalierbarkeit & Limitierungen
-- Das System ist in der aktuellen Flat-File-Architektur auf einen (oder sehr wenige gleichzeitige) Nutzer ausgelegt (Single-User bzw. Small-Team).
-- **Concurrency:** Da PHP direkt in die Dateien schreibt (`file_put_contents`), kann es bei gleichzeitigen Schreibvorgängen ohne Dateisperren (File-Locks) theoretisch zu Datenverlust kommen. Für eine breitere Nutzung müssten `flock()` oder eine relationale Datenbank (z.B. SQLite/MySQL) eingeführt werden.
-- **Performance:** Das komplette Einlesen und Entschlüsseln der JSON-Dateien bei jedem API-Aufruf ist für Listen im Bereich von tausenden Todos performant, skaliert aber nicht für Big Data. Für den angedachten Anwendungsfall ist dies jedoch absolut ausreichend.
+- **Nutzerbasis:** Das System ist in der aktuellen Flat-File-Architektur auf einen Single-User bzw. Small-Team-Betrieb ausgelegt.
+- **Concurrency:** Da PHP direkt in die Dateien schreibt (`file_put_contents`), kann es bei gleichzeitigen Schreibvorgängen ohne Dateisperren theoretisch zu Datenverlust kommen.
+- **Performance & Load-Testing:** Das System wurde erfolgreich mit Skripten (wie `generate_300.php`) auf Lasten von über 300 Datensätzen getestet. Die Performance beim Lesen und Entschlüsseln bleibt in diesem Rahmen sehr performant. Für eine Nutzung im Big-Data-Bereich (zehntausende Datensätze) wäre eine Migration zu SQLite oder MySQL angeraten, für den aktuellen Scope ist die Lösung jedoch bestens dimensioniert.

@@ -148,16 +148,21 @@ elseif ($path === '/data' && $method === 'GET') {
 elseif ($path === '/todos' && $method === 'POST') {
     $newData = json_decode(file_get_contents('php://input'), true);
     $oldData = read_secure_file('db.json') ?: ['todos' => []];
-    foreach ($newData['todos'] as $newTodo) {
+    $oldTodos = isset($oldData['todos']) && is_array($oldData['todos']) ? $oldData['todos'] : (is_array($oldData) ? $oldData : []);
+    $newTodos = isset($newData['todos']) && is_array($newData['todos']) ? $newData['todos'] : (is_array($newData) ? $newData : []);
+    
+    foreach ($newTodos as $newTodo) {
         $existed = null;
-        foreach ($oldData['todos'] as $old) { if ($old['id'] === $newTodo['id']) { $existed = $old; break; } }
-        if (!$existed) log_change($newTodo['id'], 'created', null, $newTodo);
-        elseif (json_encode($existed) !== json_encode($newTodo)) log_change($newTodo['id'], 'updated', $existed, $newTodo);
+        foreach ($oldTodos as $old) { if (isset($old['id']) && isset($newTodo['id']) && $old['id'] === $newTodo['id']) { $existed = $old; break; } }
+        if (isset($newTodo['id'])) {
+            if (!$existed) log_change($newTodo['id'], 'created', null, $newTodo);
+            elseif (json_encode($existed) !== json_encode($newTodo)) log_change($newTodo['id'], 'updated', $existed, $newTodo);
+        }
     }
-    foreach ($oldData['todos'] as $oldTodo) {
+    foreach ($oldTodos as $oldTodo) {
         $exists = false;
-        foreach ($newData['todos'] as $new) { if ($new['id'] === $oldTodo['id']) { $exists = true; break; } }
-        if (!$exists) log_change($oldTodo['id'], 'deleted', $oldTodo, null);
+        foreach ($newTodos as $new) { if (isset($oldTodo['id']) && isset($new['id']) && $new['id'] === $oldTodo['id']) { $exists = true; break; } }
+        if (!$exists && isset($oldTodo['id'])) log_change($oldTodo['id'], 'deleted', $oldTodo, null);
     }
     write_secure_file('db.json', $newData);
     echo json_encode(['success' => true]);
@@ -266,7 +271,95 @@ elseif ($path === '/changelog' && $method === 'GET') {
     echo json_encode(['changes' => $allChanges]);
 }
 elseif ($path === '/changelog/undo' && $method === 'POST') {
-    echo json_encode(['success' => true]);
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!isset($input['todoId']) || !isset($input['changeId'])) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Missing todoId or changeId']);
+        exit;
+    }
+    
+    $changesData = read_secure_file('changelog.json') ?: ['changes' => []];
+    $todoId = $input['todoId'];
+    $changeId = $input['changeId'];
+    
+    if (!isset($changesData['changes'][$todoId])) {
+        echo json_encode(['success' => false, 'message' => 'Change not found']);
+        exit;
+    }
+    
+    $targetChange = null;
+    foreach ($changesData['changes'][$todoId] as $c) {
+        if ($c['id'] === $changeId) {
+            $targetChange = $c;
+            break;
+        }
+    }
+    
+    if (!$targetChange) {
+        echo json_encode(['success' => false, 'message' => 'Change not found']);
+        exit;
+    }
+    
+    $db = read_secure_file('db.json') ?: ['todos' => []];
+    $todos = isset($db['todos']) && is_array($db['todos']) ? $db['todos'] : [];
+    
+    $todoIndex = -1;
+    foreach ($todos as $i => $t) {
+        if (isset($t['id']) && (string)$t['id'] === (string)$todoId) {
+            $todoIndex = $i;
+            break;
+        }
+    }
+    
+    $oldData = isset($targetChange['oldData']) ? $targetChange['oldData'] : null;
+    $newData = isset($targetChange['newData']) ? $targetChange['newData'] : null;
+    $action = $targetChange['action'];
+    
+    $newDbState = $todos;
+    $currentTodoState = $todoIndex !== -1 ? $todos[$todoIndex] : null;
+    
+    $undoDesc = "Wiederherstellung von Aktion: " . ($targetChange['description'] ?: $action);
+    $undoAction = '';
+    $finalNewData = null;
+    
+    if ($action === 'created' || ($action === 'imported' && !$oldData)) {
+        if ($todoIndex !== -1) {
+            array_splice($newDbState, $todoIndex, 1);
+            $undoAction = 'deleted';
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Todo existiert bereits nicht mehr.']);
+            exit;
+        }
+    } elseif ($action === 'deleted') {
+        if ($oldData) {
+            if ($todoIndex !== -1) {
+                $newDbState[$todoIndex] = $oldData;
+            } else {
+                $newDbState[] = $oldData;
+            }
+            $undoAction = 'created';
+            $finalNewData = $oldData;
+        }
+    } elseif ($action === 'updated') {
+        if ($oldData) {
+            if ($todoIndex !== -1) {
+                $newDbState[$todoIndex] = $oldData;
+            } else {
+                $newDbState[] = $oldData;
+            }
+            $undoAction = 'updated';
+            $finalNewData = $oldData;
+        }
+    }
+    
+    if ($undoAction) {
+        $db['todos'] = $newDbState;
+        write_secure_file('db.json', $db);
+        log_change($todoId, $undoAction, $currentTodoState, $finalNewData, $undoDesc);
+        echo json_encode(['success' => true, 'message' => 'Wiederherstellung erfolgreich']);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Keine Änderung möglich']);
+    }
 }
 elseif ($path === '/changelog/delete' && $method === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
@@ -288,6 +381,10 @@ elseif ($path === '/changelog/delete' && $method === 'POST') {
     } else {
         echo json_encode(['success' => false, 'message' => 'Change not found']);
     }
+}
+elseif ($path === '/changelog/clear' && $method === 'POST') {
+    write_secure_file('changelog.json', ['changes' => []]);
+    echo json_encode(['success' => true]);
 }
 else {
     http_response_code(404);

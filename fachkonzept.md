@@ -16,14 +16,15 @@ Die Anwendung richtet sich in ihrer aktuellen Ausprägung primär an Einzelnutze
 
 ### 3.2 Strukturierung & Organisation
 - **Tag-System:** Todos können mit mehreren Tags versehen werden. Eine Autovervollständigung (Suggested Tags) erleichtert die Zuweisung.
-- **Filterung:** Die Ansicht kann nach einem oder mehreren Tags gefiltert werden (inklusive oder exklusive Logik). Zudem können Aufgaben mit dem Status "erledigt" über einen zentralen Toggle-Button (oben in der Hauptleiste) ein- oder ausgeblendet werden (Standardmäßig sind sie ausgeblendet).
+- **Filterung & Suche:** Die Ansicht kann nach einem oder mehreren Tags gefiltert werden (inklusive oder exklusive Logik). Zudem können Aufgaben mit dem Status "erledigt" über einen zentralen Toggle-Button ein- oder ausgeblendet werden. Eine intelligente Freitextsuche scannt Titel und Beschreibung, um bestimmte Todos in Echtzeit zu finden.
 - **Gruppierung:** Aufgaben können dynamisch gruppiert werden nach:
-  - **Zeitlich:** Täglich, Wöchentlich (Kalenderwochen), Monatlich.
+  - **Zeitlich:** Täglich, Wöchentlich (Kalenderwochen), Monatlich. Bei aktiver Zeit-Gruppierung existiert eine "Quick-Jump"-Funktion, um direkt zum aktuellen Zeitraum zu springen.
   - **Thematisch:** Nach Tags.
 - **Sortierung:** Eine manuelle Sortierung per Drag-and-Drop ist möglich (sofern keine speziellen Filter/Gruppierungen aktiv sind), alternativ kann nach Zieldatum sortiert werden.
 
 ### 3.3 Benutzeroberfläche & Interaktion (UI/UX)
-- **Responsive Design:** Die Oberfläche passt sich dynamisch an Desktop- und Mobilgeräte an.
+- **Responsive Design:** Die Oberfläche passt sich dynamisch an Desktop- und Mobilgeräte an. Für mobile Endgeräte (Smartphones) wird ein platzsparendes Hamburger-Menü (Drawer) verwendet, welches alle Filter, Tags und Einstellungen beinhaltet, um die Übersichtlichkeit zu wahren.
+- **Floating Search:** Das Suchfeld ist platzsparend als ausfahrbares Floating-Element implementiert.
 - **Drag & Drop:** Aufgaben können per Maus oder Touch-Gesten frei verschoben oder zwischen verschiedenen Gruppierungen (z. B. von einer Kalenderwoche in die nächste) umverteilt werden, wobei sich das Zieldatum automatisch anpasst.
 - **Rich-Text Editor:** Für detailreiche Beschreibungen der Aufgaben.
 

@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import draggable from 'vuedraggable'
-import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2 } from 'lucide-vue-next'
+import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2, ArrowDown, HelpCircle, Menu } from 'lucide-vue-next'
 import Editor from './components/Editor.vue'
 import TodoItem from './components/TodoItem.vue'
 import BackupModal from './components/BackupModal.vue'
@@ -67,6 +67,17 @@ const showCompleted = ref(false)
 const newTodo = ref({ name: '', description: '', targetDate: '', tags: [], status: 'offen' })
 const newTodoTagInput = ref('')
 const showNewForm = ref(false)
+const searchQuery = ref('')
+const searchExpanded = ref(false)
+const searchInputRef = ref(null)
+const mobileMenuOpen = ref(false)
+
+const toggleSearch = () => {
+  searchExpanded.value = !searchExpanded.value
+  if (searchExpanded.value) {
+    setTimeout(() => searchInputRef.value?.focus(), 100)
+  }
+}
 
 const profileData = ref({ username: 'frost0xx', password: '' })
 const profileStatus = ref('')
@@ -248,6 +259,13 @@ const filteredTodos = computed(() => {
     if (isExclusive.value) result = result.filter(t => activeTags.value.every(tag => t.tags && t.tags.includes(tag)))
     else result = result.filter(t => activeTags.value.some(tag => t.tags && t.tags.includes(tag)))
   }
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase()
+    result = result.filter(t => 
+      (t.name && t.name.toLowerCase().includes(q)) || 
+      (t.description && t.description.toLowerCase().includes(q))
+    )
+  }
   return result
 })
 
@@ -309,6 +327,38 @@ const sortedArchived = computed(() => {
     if (!b.targetDate) return -1
     return new Date(b.targetDate).getTime() - new Date(a.targetDate).getTime()
   })
+})
+
+const isCurrentPeriod = (key) => {
+  if (key === 'Kein Datum' || key === 'Alle') return false
+  const now = new Date()
+  
+  if (aggregation.value === 'daily') {
+    const y = now.getFullYear()
+    const m = String(now.getMonth() + 1).padStart(2, '0')
+    const d = String(now.getDate()).padStart(2, '0')
+    return key === `${y}-${m}-${d}`
+  }
+  if (aggregation.value === 'weekly') {
+    return key === `KW ${getWeekNumber(now)} (${now.getFullYear()})`
+  }
+  if (aggregation.value === 'monthly') {
+    return key === now.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+  }
+  return false
+}
+
+const scrollToCurrent = () => {
+  setTimeout(() => {
+    const el = document.getElementById('group-current')
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, 100)
+}
+
+watch(aggregation, (newVal) => {
+  if (newVal !== 'none') {
+    scrollToCurrent()
+  }
 })
 
 const allTags = computed(() => {
@@ -406,14 +456,18 @@ onMounted(() => {
 
 <template>
   <div class="app-container">
-    <div class="top-bar card slim">
-      <div class="pure-g">
-        <div class="pure-u-1 pure-u-md-1-8">
+    <!-- 1. DESKTOP NAV -->
+    <div class="top-bar card slim desktop-nav">
+      <div class="top-bar-inner">
+        <!-- Logo Area -->
+        <div class="logo-area">
           <h1 class="logo">Aufgabenliste</h1>
         </div>
-        <div class="pure-u-1 pure-u-md-7-8 actions-row">
+
+        <!-- Scrollable Filters -->
+        <div class="scrollable-filters">
           <div class="control-item tags-filter-container">
-            <Filter :size="14" />
+            <Filter :size="14" style="flex-shrink: 0;" />
             <div class="tags-chips small-chips">
               <span v-for="tag in allTags" :key="tag" class="tag-chip" :class="{ active: activeTags.includes(tag) }" @click="toggleTagFilter(tag)">{{ tag }}</span>
             </div>
@@ -422,41 +476,42 @@ onMounted(() => {
             </label>
           </div>
 
-          <div class="control-item">
-            <Clock :size="14" />
-            <select v-model="aggregation" class="minimal-select">
-              <option value="none">Zeit: Aus</option>
-              <option value="daily">Täglich</option>
-              <option value="weekly">Wöchentlich</option>
-              <option value="monthly">Monatlich</option>
-            </select>
+          <div class="control-item tags-chips small-chips">
+            <span class="tag-chip" :class="{ active: aggregation === 'daily' }" @click="aggregation = aggregation === 'daily' ? 'none' : 'daily'" title="Täglich">
+              <Clock :size="12" /> Tag
+            </span>
+            <span class="tag-chip" :class="{ active: aggregation === 'weekly' }" @click="aggregation = aggregation === 'weekly' ? 'none' : 'weekly'" title="Wöchentlich">
+              <Clock :size="12" /> Woche
+            </span>
+            <span class="tag-chip" :class="{ active: aggregation === 'monthly' }" @click="aggregation = aggregation === 'monthly' ? 'none' : 'monthly'" title="Monatlich">
+              <Clock :size="12" /> Monat
+            </span>
+            <button v-if="aggregation !== 'none'" class="pure-button mini-btn secondary" @click="scrollToCurrent" title="Zum aktuellen Zeitraum springen" style="padding: 0 0.4rem; height: 1.5rem; margin-left: 0.2rem; color: var(--primary);">
+              <ArrowDown :size="14" />
+            </button>
           </div>
 
-          <div v-if="aggregation === 'none'" class="control-item">
-            <SortAsc :size="14" />
-            <select v-model="activeSort.by" class="minimal-select">
-              <option value="order">Eigene</option>
-              <option value="targetDate">Datum</option>
-            </select>
-            <button v-if="activeSort.by === 'targetDate'" class="pure-button mini-btn secondary" @click="activeSort.dir = activeSort.dir === 'asc' ? 'desc' : 'asc'">
+          <div v-if="aggregation === 'none'" class="control-item tags-chips small-chips">
+            <span class="tag-chip" :class="{ active: activeSort.by === 'targetDate' }" @click="activeSort.by = activeSort.by === 'targetDate' ? 'order' : 'targetDate'" title="Nach Datum sortieren">
+              <SortAsc :size="12" /> Datum
+            </span>
+            <button v-if="activeSort.by === 'targetDate'" class="pure-button mini-btn secondary" style="padding: 0 0.4rem; height: 1.5rem; margin-left: -0.2rem;" @click="activeSort.dir = activeSort.dir === 'asc' ? 'desc' : 'asc'">
               {{ activeSort.dir === 'asc' ? '↑' : '↓' }}
             </button>
           </div>
 
-          <div class="control-item">
-            <label class="toggle-label">
-              <input type="checkbox" v-model="groupByTags" />
-              <Layers :size="14" /> Gruppieren
-            </label>
+          <div class="control-item tags-chips small-chips">
+            <span class="tag-chip" :class="{ active: groupByTags }" @click="groupByTags = !groupByTags" title="Nach Tags gruppieren">
+              <Layers :size="12" /> Tags
+            </span>
+            <span class="tag-chip" :class="{ active: showCompleted }" @click="showCompleted = !showCompleted" title="Erledigte Aufgaben anzeigen">
+              <CheckCircle2 :size="12" /> Erledigte
+            </span>
           </div>
+        </div>
 
-          <div class="control-item">
-            <label class="toggle-label" title="Erledigte Aufgaben anzeigen">
-              <input type="checkbox" v-model="showCompleted" />
-              <CheckCircle2 :size="14" /> Erledigte
-            </label>
-          </div>
-          
+        <!-- Fixed Actions -->
+        <div class="fixed-actions">
           <button v-if="aggregation !== 'none' || groupByTags || activeTags.length || showCompleted" class="pure-button mini-btn secondary" @click="resetAll" title="Reset">
             <X :size="12" />
           </button>
@@ -483,6 +538,113 @@ onMounted(() => {
           <button class="pure-button pure-button-primary mini-btn" @click="showNewForm = !showNewForm" title="Neu">
             <Plus :size="16" />
           </button>
+
+          <div class="floating-search" :class="{ expanded: searchExpanded }">
+            <input ref="searchInputRef" v-model="searchQuery" type="text" placeholder="Suchen..." class="expandable-input" :style="{ opacity: searchExpanded ? 1 : 0, pointerEvents: searchExpanded ? 'auto' : 'none' }" />
+            <button class="search-icon-btn" @click="toggleSearch" title="Suchen">
+              <HelpCircle :size="18" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. MOBILE NAV -->
+    <div class="top-bar card slim mobile-nav">
+      <div class="mobile-top-bar-inner">
+        <button class="pure-button mini-btn secondary hamburger-btn" @click="mobileMenuOpen = true" title="Menü">
+          <Menu :size="18" />
+        </button>
+        
+        <h1 class="logo mobile-logo">Aufgabenliste</h1>
+        
+        <div class="mobile-quick-actions">
+          <button class="pure-button pure-button-primary mini-btn" @click="showNewForm = !showNewForm" title="Neu">
+            <Plus :size="16" />
+          </button>
+          
+          <button class="search-icon-btn mobile-search-btn" @click="toggleSearch" title="Suchen">
+            <HelpCircle :size="18" />
+          </button>
+        </div>
+      </div>
+      
+      <!-- Mobile Search Input (Visible only when expanded) -->
+      <div v-if="searchExpanded" class="mobile-search-bar">
+         <input ref="searchInputRef" v-model="searchQuery" type="text" placeholder="Suchen..." class="expandable-input mobile-input" />
+         <button class="pure-button mini-btn secondary" @click="searchExpanded = false">
+            <X :size="14" />
+         </button>
+      </div>
+    </div>
+
+    <!-- 3. MOBILE DRAWER OVERLAY -->
+    <div class="mobile-drawer-overlay" :class="{ open: mobileMenuOpen }" @click="mobileMenuOpen = false">
+      <div class="mobile-drawer-content card" @click.stop>
+        <div class="drawer-header">
+          <h2>Menü & Filter</h2>
+          <button class="pure-button mini-btn secondary" @click="mobileMenuOpen = false"><X :size="16" /></button>
+        </div>
+        
+        <div class="drawer-body">
+           <!-- Filters duplicated from Desktop -->
+           <div class="drawer-section">
+             <h3>Filter & Tags</h3>
+             <div class="tags-chips">
+                <span v-for="tag in allTags" :key="tag" class="tag-chip" :class="{ active: activeTags.includes(tag) }" @click="toggleTagFilter(tag)">{{ tag }}</span>
+             </div>
+             <label class="toggle-label mini" v-if="activeTags.length > 1" style="margin-top: 0.5rem; display: inline-flex;">
+                <input type="checkbox" v-model="isExclusive" /> Exklusiv
+             </label>
+           </div>
+           
+           <div class="drawer-section">
+             <h3>Zeitraum</h3>
+             <div class="tags-chips">
+               <span class="tag-chip" :class="{ active: aggregation === 'daily' }" @click="aggregation = aggregation === 'daily' ? 'none' : 'daily'">Tag</span>
+               <span class="tag-chip" :class="{ active: aggregation === 'weekly' }" @click="aggregation = aggregation === 'weekly' ? 'none' : 'weekly'">Woche</span>
+               <span class="tag-chip" :class="{ active: aggregation === 'monthly' }" @click="aggregation = aggregation === 'monthly' ? 'none' : 'monthly'">Monat</span>
+             </div>
+             <button v-if="aggregation !== 'none'" class="pure-button mini-btn secondary drawer-btn" @click="scrollToCurrent(); mobileMenuOpen = false" style="margin-top: 0.5rem;">
+               <ArrowDown :size="14" /> Zum aktuellen Zeitraum springen
+             </button>
+           </div>
+
+           <div v-if="aggregation === 'none'" class="drawer-section">
+             <h3>Sortierung</h3>
+             <div class="tags-chips">
+               <span class="tag-chip" :class="{ active: activeSort.by === 'targetDate' }" @click="activeSort.by = activeSort.by === 'targetDate' ? 'order' : 'targetDate'">Datum</span>
+               <button v-if="activeSort.by === 'targetDate'" class="pure-button mini-btn secondary" style="padding: 0 0.4rem; height: 1.5rem;" @click="activeSort.dir = activeSort.dir === 'asc' ? 'desc' : 'asc'">
+                 {{ activeSort.dir === 'asc' ? '↑ Aufsteigend' : '↓ Absteigend' }}
+               </button>
+             </div>
+           </div>
+
+           <div class="drawer-section">
+             <h3>Ansicht</h3>
+             <div class="tags-chips">
+               <span class="tag-chip" :class="{ active: groupByTags }" @click="groupByTags = !groupByTags">Nach Tags gruppieren</span>
+               <span class="tag-chip" :class="{ active: showCompleted }" @click="showCompleted = !showCompleted">Erledigte Aufgaben anzeigen</span>
+             </div>
+           </div>
+
+           <div class="drawer-section drawer-actions">
+             <button v-if="aggregation !== 'none' || groupByTags || activeTags.length || showCompleted" class="pure-button mini-btn secondary drawer-btn" @click="resetAll">
+               <X :size="14" /> Alle Filter zurücksetzen
+             </button>
+             
+             <button class="pure-button mini-btn secondary drawer-btn" @click="showBackupModal = true; mobileMenuOpen = false">
+               <HardDrive :size="14" /> Backup & Archiv
+             </button>
+
+             <button class="pure-button mini-btn secondary drawer-btn" @click="currentView = 'profile'; mobileMenuOpen = false">
+               <User :size="14" /> Zugangsdaten
+             </button>
+
+             <button class="pure-button mini-btn secondary drawer-btn" @click="handleLogout(); mobileMenuOpen = false">
+               <LogOut :size="14" /> Abmelden
+             </button>
+           </div>
         </div>
       </div>
     </div>
@@ -532,7 +694,10 @@ onMounted(() => {
 
       <template v-else>
         <div v-for="group in groupedTodos" :key="group.key" class="todo-group">
-          <div v-if="group.key !== 'Alle'" class="group-header"><Calendar :size="16" /> {{ getGroupLabel(group.key) }}</div>
+          <div v-if="group.key !== 'Alle'" class="group-header" :class="{ 'current-period': isCurrentPeriod(group.key) }" :id="isCurrentPeriod(group.key) ? 'group-current' : ''">
+            <Calendar :size="16" /> {{ getGroupLabel(group.key) }}
+            <span v-if="isCurrentPeriod(group.key)" class="badge current-badge">Aktuell</span>
+          </div>
           <div v-if="groupByTags" class="tag-subgroups">
             <div v-for="sub in group.subGroups" :key="sub.key" class="tag-group">
               <div class="sub-header"><Tag :size="12" /> {{ sub.key }}</div>
@@ -607,17 +772,30 @@ onMounted(() => {
 
 <style scoped>
 .top-bar { padding: 0.3rem 0.75rem; margin-bottom: 0.5rem; position: sticky; top: 0.5rem; z-index: 1000; overflow: visible; }
+.top-bar-inner { display: flex; align-items: center; gap: 0.5rem; width: 100%; min-height: 2rem; justify-content: space-between; }
+.logo-area { flex-shrink: 0; }
 .logo { font-size: 0.95rem; margin: 0; line-height: 2rem; white-space: nowrap; font-weight: 800; color: var(--primary); }
-.actions-row { display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; flex-wrap: nowrap; overflow: visible; }
-.actions-row::-webkit-scrollbar { display: none; }
-.control-item { display: flex; align-items: center; gap: 0.25rem; font-size: 0.7rem; color: #4b5563; white-space: nowrap; }
-.tags-filter-container { flex: 0 1 auto; min-width: 60px; max-width: 45%; overflow: hidden; display: flex; align-items: center; gap: 0.3rem; }
-.small-chips { gap: 0.15rem !important; overflow-x: auto; display: flex; flex-shrink: 1; }
-.small-chips .tag-chip { font-size: 0.6rem; padding: 0.05rem 0.35rem; border-radius: 2rem; }
-.toggle-label { cursor: pointer; display: flex; align-items: center; gap: 0.2rem; font-weight: 500; }
-.toggle-label.mini { font-size: 0.65rem; color: var(--primary); background: #eff6ff; padding: 0.1rem 0.4rem; border-radius: 2rem; }
-.minimal-select { border: 1px solid var(--border-color); background: white; font-size: 0.7rem; color: #1f2937; padding: 0.1rem 0.25rem; border-radius: 2rem; }
-.mini-btn { padding: 0.15rem 0.4rem; font-size: 0.75rem; border-radius: 2rem !important; min-width: 2rem; display: flex; justify-content: center; }
+
+.scrollable-filters { flex: 1 1 auto; display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.scrollable-filters::-webkit-scrollbar { display: none; }
+
+.fixed-actions { flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem; position: relative; padding-right: 36px; height: 100%; }
+
+.control-item { display: flex; align-items: center; gap: 0.25rem; font-size: 0.7rem; color: #4b5563; white-space: nowrap; flex-shrink: 0; height: 1.8rem; }
+.tags-filter-container { flex: 0 1 auto; max-width: 45%; display: flex; align-items: center; gap: 0.3rem; }
+.small-chips { gap: 0.15rem !important; overflow-x: auto; white-space: nowrap; scrollbar-width: none; display: flex; align-items: center; height: 100%; }
+.small-chips::-webkit-scrollbar { display: none; }
+.small-chips .tag-chip { font-size: 0.6rem; padding: 0.05rem 0.35rem; border-radius: 2rem; flex-shrink: 0; display: flex; align-items: center; height: 1.4rem; }
+
+.floating-search { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; background: white; border-radius: 2rem; border: 1px solid var(--border-color); overflow: hidden; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 32px; height: 32px; z-index: 100; box-sizing: border-box; }
+.floating-search.expanded { width: 220px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-color: #3b82f6; }
+.search-icon-btn { position: absolute; right: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; background: transparent; border: none; display: flex; align-items: center; justify-content: center; color: #6b7280; cursor: pointer; padding: 0; flex-shrink: 0; outline: none; }
+.expandable-input { width: 100%; border: none; background: transparent; padding: 0 30px 0 0.8rem; font-size: 0.85rem; outline: none; color: #374151; transition: opacity 0.2s; box-sizing: border-box; height: 100%; }
+
+.toggle-label { cursor: pointer; display: flex; align-items: center; gap: 0.2rem; font-weight: 500; flex-shrink: 0; height: 100%; }
+.toggle-label.mini { font-size: 0.65rem; color: var(--primary); background: #eff6ff; padding: 0 0.4rem; border-radius: 2rem; height: 1.4rem; }
+.minimal-select { border: 1px solid var(--border-color); background: white; font-size: 0.7rem; color: #1f2937; padding: 0.1rem 0.25rem; border-radius: 2rem; height: 1.6rem; }
+.mini-btn { padding: 0 0.4rem; font-size: 0.75rem; border-radius: 2rem !important; min-width: 2rem; display: flex; justify-content: center; align-items: center; height: 1.6rem; box-sizing: border-box; }
 .mini-btn.secondary { background: #f3f4f6; color: #4b5563; border: 1px solid var(--border-color); }
 .tag-chip { padding: 0.1rem 0.4rem; background: #f3f4f6; border-radius: 2rem; cursor: pointer; white-space: nowrap; transition: all 0.2s; border: 1px solid transparent; }
 .tag-chip:hover { background: #e5e7eb; }
@@ -628,92 +806,79 @@ onMounted(() => {
 .todo-list { display: flex; flex-direction: column; gap: 0.3rem; }
 .empty-state { text-align: center; padding: 2rem; color: #9ca3af; font-style: italic; font-size: 0.9rem; }
 .todo-group { margin-bottom: 0.75rem; }
-.group-header { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem; font-weight: 800; color: #111827; font-size: 0.8rem; border-bottom: 1px solid #e5e7eb; margin-bottom: 0.3rem; background: #f9fafb; }
-.sub-header { display: flex; align-items: center; gap: 0.2rem; padding: 0.1rem 0.5rem; font-weight: 600; color: #4b5563; font-size: 0.7rem; }
+.group-header { padding: 0.5rem 1rem; background: #f3f4f6; font-weight: 600; font-size: 0.95rem; color: #374151; display: flex; align-items: center; gap: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem; }
+.group-header.current-period { background: #eff6ff; border-left: 4px solid #3b82f6; color: #1e3a8a; }
+.current-badge { background: #3b82f6; color: white; margin-left: 0.5rem; font-size: 0.7rem; padding: 0.1rem 0.5rem; border-radius: 2rem; }
+.sub-header { padding: 0.3rem 1rem; font-size: 0.85rem; font-weight: 500; color: #4b5563; background: #f9fafb; margin: 0.25rem 0; display: flex; align-items: center; gap: 0.3rem; }
 .tag-group { margin-left: 0.4rem; border-left: 2px solid #f3f4f6; }
 .group-items { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.1rem 0.3rem; }
+
+/* Mobile specific classes hidden on desktop */
+.mobile-nav { display: none; }
+.mobile-drawer-overlay { display: none; }
 
 /* Desktop-only styles - no changes needed here for desktop */
 
 @media (max-width: 1024px) {
-  .actions-row {
+  .top-bar-inner {
     flex-wrap: wrap;
+  }
+  .scrollable-filters {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
   }
 }
 
 @media (max-width: 768px) {
-  .logo { display: none; }
+  /* HIDE DESKTOP NAV COMPLETELY */
+  .desktop-nav { display: none !important; }
   
-  .top-bar {
-    position: static;
-  }
+  /* SHOW MOBILE NAV */
+  .mobile-nav { display: block; position: sticky; top: 0; z-index: 1000; padding: 0.5rem 0.75rem; overflow: visible; }
+  .mobile-top-bar-inner { display: flex; align-items: center; justify-content: space-between; width: 100%; position: relative; }
   
-  .actions-row {
-    flex-direction: column;
-    width: 100%;
-    gap: 0.3rem;
-  }
+  .hamburger-btn { background: transparent; border: none; padding: 0.3rem; display: flex; align-items: center; justify-content: center; }
+  .mobile-logo { font-size: 1.1rem; font-weight: 800; color: var(--primary); margin: 0; position: absolute; left: 50%; transform: translateX(-50%); }
   
-  .control-item {
-    font-size: 0.65rem;
-    white-space: normal;
-    flex: 1 0 100%;
-    width: 100%;
-  }
+  .mobile-quick-actions { display: flex; align-items: center; gap: 0.5rem; }
+  .mobile-search-btn { position: relative; width: 32px; height: 32px; background: #f3f4f6; color: #4b5563; }
   
-  .tags-filter-container {
-    max-width: 100%;
-    min-width: auto;
-  }
+  .mobile-search-bar { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; padding: 0.2rem 0; animation: slideDown 0.2s ease-out; }
+  .mobile-input { background: #f9fafb; border: 1px solid var(--border-color); border-radius: 2rem; padding: 0.4rem 1rem; flex: 1; height: 2rem; }
   
-  .small-chips {
-    width: 100%;
-    flex-wrap: wrap;
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* MOBILE DRAWER OVERLAY */
+  .mobile-drawer-overlay {
+    display: block; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5); z-index: 2000;
+    opacity: 0; pointer-events: none; transition: opacity 0.3s;
   }
+  .mobile-drawer-overlay.open { opacity: 1; pointer-events: auto; }
   
-  .toggle-label.mini {
-    font-size: 0.6rem;
+  .mobile-drawer-content {
+    position: absolute; top: 0; left: -100%; bottom: 0; width: 85%; max-width: 320px;
+    background: white; box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    display: flex; flex-direction: column; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 0;
   }
+  .mobile-drawer-overlay.open .mobile-drawer-content { left: 0; }
   
-  .minimal-select {
-    flex: 1;
-    min-width: 70px;
-  }
+  .drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem; border-bottom: 1px solid var(--border-color); }
+  .drawer-header h2 { margin: 0; font-size: 1.2rem; color: #1f2937; }
   
-  .mini-btn {
-    padding: 0.15rem 0.35rem;
-    font-size: 0.7rem;
-    height: 1.8rem;
-  }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 1.5rem; }
+  
+  .drawer-section h3 { margin: 0 0 0.5rem 0; font-size: 0.85rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+  .drawer-section .tags-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; overflow: visible; }
+  .drawer-section .tag-chip { font-size: 0.85rem; padding: 0.4rem 0.8rem; height: auto; display: inline-block; }
+  
+  .drawer-actions { display: flex; flex-direction: column; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem; }
+  .drawer-btn { justify-content: flex-start; padding: 0.75rem 1rem; font-size: 0.95rem; height: auto; gap: 0.75rem; background: #f9fafb; border: 1px solid var(--border-color); width: 100%; }
   
   .empty-state {
     padding: 1.5rem 0.75rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .control-item {
-    font-size: 0.6rem;
-  }
-  
-  .mini-btn {
-    padding: 0.12rem 0.3rem;
-    font-size: 0.65rem;
-    min-width: 1.6rem;
-    height: 1.6rem;
-  }
-  
-  .minimal-select {
-    font-size: 0.6rem;
-    min-width: 60px;
-  }
-  
-  .small-chips .tag-chip {
-    font-size: 0.5rem;
-  }
-  
-  .tag-chip {
-    font-size: 0.6rem;
   }
 }
 

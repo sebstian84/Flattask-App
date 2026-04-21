@@ -64,6 +64,8 @@ const getActionLabel = (change) => {
 }
 
 const getChangeDescription = (change) => {
+  const name = change.newData?.name || change.oldData?.name;
+  if (name) return `${name} ${change.description ? `(${change.description})` : ''}`.trim();
   return change.description || change.todoName || 'Unbekannter Eintrag'
 }
 
@@ -174,6 +176,8 @@ const reviveFromArchive = async (id) => {
     await axios.post(`${API_URL}/archive`, { archivedTodos: archive })
     const todosRes = await axios.get(`${API_URL}/data`)
     const todos = todosRes.data.todos || []
+    if (!todo.status) todo.status = 'offen'
+    
     todos.push(todo)
     await axios.post(`${API_URL}/todos`, { todos })
     message.value = 'Aufgabe erfolgreich wiederhergestellt!'
@@ -181,7 +185,8 @@ const reviveFromArchive = async (id) => {
     await fetchArchive()
     emit('revived')
   } catch (err) {
-    message.value = 'Fehler beim Wiederherstellen.'
+    console.error('Revive Error:', err, err.response?.data)
+    message.value = `Fehler beim Wiederherstellen: ${err.response?.data?.message || err.message}`
     messageType.value = 'error'
   }
 }
@@ -245,6 +250,24 @@ const deleteFromHistory = async (change) => {
     }
   } catch (error) {
     message.value = `❌ Fehler: ${error.message}`
+    messageType.value = 'error'
+  }
+}
+
+const clearAllHistory = async () => {
+  if (!confirm('Möchten Sie wirklich die gesamte Historie endgültig löschen? Dies kann nicht rückgängig gemacht werden.')) return
+  try {
+    const response = await axios.post(`${API_URL}/changelog/clear`)
+    if (response.data.success) {
+      message.value = 'Die gesamte Historie wurde gelöscht.'
+      messageType.value = 'success'
+      await fetchChangelog()
+    } else {
+      message.value = 'Fehler beim Löschen der Historie.'
+      messageType.value = 'error'
+    }
+  } catch (err) {
+    message.value = 'Fehler beim Löschen der Historie.'
     messageType.value = 'error'
   }
 }
@@ -317,6 +340,12 @@ const deleteFromHistory = async (change) => {
         </div>
 
         <div v-show="activeTab === 'history'" class="tab-content history-tab">
+          <div class="history-header-actions" v-if="changelog.length > 0" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <span style="font-size: 0.85rem; color: #4b5563;">Anzahl der gespeicherten Einträge: <strong>{{ changelog.length }}</strong></span>
+            <button class="pure-button mini-btn danger-btn" @click="clearAllHistory" title="Gesamte Historie löschen">
+              <Trash2 :size="14" style="margin-right: 0.3rem" /> Alle löschen
+            </button>
+          </div>
           <div v-if="changelog.length === 0" class="empty-state">Keine Änderungen vorhanden.</div>
           <div v-else class="changelog-list">
             <div v-for="change in changelog" :key="change.id" class="changelog-entry card slim">
