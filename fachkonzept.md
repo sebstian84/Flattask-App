@@ -9,14 +9,14 @@ Die Anwendung richtet sich in ihrer aktuellen Ausprägung primär an Einzelnutze
 ## 3. Funktionsübersicht
 
 ### 3.1 Todo-Verwaltung (CRUD)
-- **Erstellen:** Neue Aufgaben können mit einem Titel, einem optionalen Zieldatum, einer Rich-Text-Beschreibung und beliebigen Tags angelegt werden.
-- **Lesen & Anzeigen:** Aufgaben werden übersichtlich in einer Liste oder gruppiert dargestellt.
-- **Aktualisieren:** Inline-Bearbeitung von Titel und Zieldatum. Die Rich-Text-Beschreibung kann über einen dedizierten Editor (inkl. Formatierungen) angepasst werden.
+- **Erstellen:** Neue Aufgaben können mit einem Titel (max. 150 Zeichen), einem optionalen Zieldatum, einer Rich-Text-Beschreibung, Tags und einem Status angelegt werden.
+- **Lesen & Anzeigen:** Aufgaben werden übersichtlich in einer Liste oder gruppiert dargestellt. Jeder Task hat einen Status (offen oder erledigt).
+- **Aktualisieren:** Inline-Bearbeitung von Titel, Zieldatum, Status und Beschreibung. Die Rich-Text-Beschreibung kann per Klick im ausgeklappten Bereich direkt angepasst werden.
 - **Löschen & Archivieren:** Aufgaben werden nicht sofort physisch gelöscht, sondern in ein Archiv verschoben. Aus dem Archiv können sie dauerhaft gelöscht oder wiederhergestellt werden.
 
 ### 3.2 Strukturierung & Organisation
 - **Tag-System:** Todos können mit mehreren Tags versehen werden. Eine Autovervollständigung (Suggested Tags) erleichtert die Zuweisung.
-- **Filterung:** Die Ansicht kann nach einem oder mehreren Tags gefiltert werden. Dabei wird zwischen inklusiver (ODER-Logik) und exklusiver (UND-Logik) Filterung unterschieden.
+- **Filterung:** Die Ansicht kann nach einem oder mehreren Tags gefiltert werden (inklusive oder exklusive Logik). Zudem können Aufgaben mit dem Status "erledigt" über einen zentralen Toggle-Button (oben in der Hauptleiste) ein- oder ausgeblendet werden (Standardmäßig sind sie ausgeblendet).
 - **Gruppierung:** Aufgaben können dynamisch gruppiert werden nach:
   - **Zeitlich:** Täglich, Wöchentlich (Kalenderwochen), Monatlich.
   - **Thematisch:** Nach Tags.
@@ -31,18 +31,20 @@ Die Anwendung richtet sich in ihrer aktuellen Ausprägung primär an Einzelnutze
 - Ein Login-System schützt die Daten vor unbefugtem Zugriff.
 - Der Benutzername und das Passwort können über die Profilverwaltung innerhalb der App geändert werden.
 
-### 3.5 Backup & Wiederherstellung
-- Die Anwendung bietet eine integrierte Exportfunktion, mit der alle aktuellen Todos, das Archiv und die Einstellungen als JSON-Datei heruntergeladen werden können.
-- Ein Import-Dialog ermöglicht die Wiederherstellung oder Zusammenführung aus bestehenden Backups, wobei Duplikate automatisch erkannt und übersprungen werden.
+### 3.5 Backup, Wiederherstellung & Historie
+- Die Anwendung bietet eine integrierte Exportfunktion für Todos, Archiv und Einstellungen.
+- Ein Import-Dialog ermöglicht die Wiederherstellung, wobei Duplikate übersprungen werden.
+- **Historie (Changelog):** Jede Änderung (Anlage, Bearbeitung, Löschung) an einem Task wird protokolliert. In der Historien-Ansicht können die Änderungen (Alte vs. Neue Werte) detailliert eingesehen werden. Einträge lassen sich gezielt rückgängig machen oder löschen.
 
 ## 4. Datenmodell (Logische Struktur)
 
 - **Todo-Objekt:**
   - `id`: Eindeutiger Identifier (Timestamp).
-  - `name`: Kurztitel der Aufgabe.
+  - `name`: Kurztitel der Aufgabe (max. 150 Zeichen).
   - `description`: Detaillierte Beschreibung (HTML/Rich-Text).
   - `targetDate`: Optionales Fälligkeits- oder Zieldatum (YYYY-MM-DD).
   - `tags`: Array von Strings.
+  - `status`: Zustand des Tasks ('offen' oder 'erledigt').
   - `order`: Integer für die manuelle Sortierreihenfolge.
 - **Settings-Objekt:**
   - Speichert UI-Zustände (aktive Tags, Gruppierungsart, Sortierung), um diese sitzungsübergreifend beizubehalten.

@@ -19,11 +19,11 @@ Die Anwendung folgt einer klassischen Client-Server-Architektur mit einer klaren
 ## 3. Datenhaltung & Persistenz
 Alle persistierten Daten liegen im Verzeichnis `api/data/`. Der Webserver benötigt Schreib- und Leserechte für dieses Verzeichnis.
 
-- `db.json`: Speichert alle aktuell aktiven Todos.
+- `db.json`: Speichert alle aktuell aktiven Todos (inklusive Status 'offen'/'erledigt').
 - `archive.json`: Speichert alle gelöschten/archivierten Todos.
 - `users.json`: Speichert die Zugangsdaten (Benutzername und Passwort).
-- `settings.json`: Speichert applikationsweite UI-Einstellungen (Sortierung, Gruppierung, etc.).
-- `changelog.json`: Speichert eine Historie der Änderungen für jedes Todo.
+- `settings.json`: Speichert applikationsweite UI-Einstellungen (Sortierung, Gruppierung, Filterung nach Erledigten, etc.).
+- `changelog.json`: Speichert eine Historie der Änderungen für jedes Todo. Jeder Eintrag enthält detaillierte Vorher- (`oldData`) und Nachher-Werte (`newData`), um genaue Vergleiche in der Historienansicht zu ermöglichen.
 
 ## 4. Sicherheit & Datenschutz
 
@@ -60,7 +60,7 @@ Um die sensiblen Daten in den JSON-Dateien zu schützen, implementiert das Backe
 ## 6. Monitoring, Logging & Wartung
 
 ### 6.1 Application Logging
-Änderungen an Todos (Erstellen, Updaten, Löschen, Wiederherstellen) werden programmatisch in der `changelog.json` protokolliert. Dies dient weniger der Systemüberwachung als vielmehr dem fachlichen Audit-Trail.
+Änderungen an Todos (Erstellen, Updaten, Löschen, Wiederherstellen) werden programmatisch in der `changelog.json` protokolliert. Dies dient dem fachlichen Audit-Trail. Die Datenstruktur speichert exakt, welche Felder sich wie verändert haben, und erlaubt ein gezieltes Rückgängigmachen oder Löschen einzelner Historien-Einträge über die UI.
 
 ### 6.2 Backup-Strategie
 - **Manuell über UI:** Der Benutzer kann über die Oberfläche ein vollständiges Backup im JSON-Format herunterladen (und wieder importieren).

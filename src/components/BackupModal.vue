@@ -79,6 +79,38 @@ const toggleExpanded = (changeId) => {
   expandedChanges.value[changeId] = !expandedChanges.value[changeId]
 }
 
+const getChangeDetails = (change) => {
+  if (!change.oldData && !change.newData) return []
+  const details = []
+  const keysToIgnore = ['id', 'order', 'tags'] // Handle tags separately if needed, or just include them
+  const allKeys = new Set([
+    ...(change.oldData ? Object.keys(change.oldData) : []),
+    ...(change.newData ? Object.keys(change.newData) : [])
+  ])
+  
+  allKeys.forEach(key => {
+    if (keysToIgnore.includes(key)) return
+    const oldVal = change.oldData ? change.oldData[key] : undefined
+    const newVal = change.newData ? change.newData[key] : undefined
+    
+    // Only show if they differ, or if it's a create/delete action
+    if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+       const formatVal = (v) => {
+         if (v === undefined || v === null || v === '') return '<i>leer</i>'
+         if (key === 'status') return v === 'erledigt' ? 'Erledigt' : 'Offen'
+         if (typeof v === 'string' && v.length > 50) return v.substring(0, 50) + '...'
+         return v
+       }
+       details.push({
+         key: key === 'name' ? 'Titel' : key === 'description' ? 'Text' : key === 'targetDate' ? 'Datum' : key === 'status' ? 'Status' : key,
+         old: formatVal(oldVal),
+         new: formatVal(newVal)
+       })
+    }
+  })
+  return details
+}
+
 const downloadBackup = async () => {
   try {
     const res = await axios.get(`${API_URL}/backup/export`)
@@ -294,6 +326,14 @@ const deleteFromHistory = async (change) => {
                   <span class="changelog-date">{{ formatDate(change.timestamp) }}</span>
                 </div>
                 <div class="changelog-summary">{{ getChangeDescription(change) }}</div>
+                <div v-if="expandedChanges[change.id]" class="changelog-details">
+                  <div v-for="detail in getChangeDetails(change)" :key="detail.key" class="detail-row">
+                    <strong>{{ detail.key }}:</strong> 
+                    <span class="old-val" v-html="detail.old"></span> 
+                    <span class="arrow">➔</span> 
+                    <span class="new-val" v-html="detail.new"></span>
+                  </div>
+                </div>
               </div>
               <div class="action-buttons">
                 <button class="undo-btn" @click.stop="undoChange(change)" :disabled="undoInProgress[change.id]" title="Rückgängig">
@@ -362,6 +402,11 @@ const deleteFromHistory = async (change) => {
 .action-badge { font-size: 0.7rem; font-weight: 600; padding: 0.1rem 0.4rem; border-radius: 1rem; background: #f3f4f6; color: #4b5563; }
 .changelog-date { font-size: 0.75rem; color: #9ca3af; }
 .changelog-summary { font-size: 0.875rem; color: #374151; font-weight: 500; }
+.changelog-details { margin-top: 0.5rem; padding: 0.5rem; background: #f9fafb; border-radius: 0.25rem; font-size: 0.75rem; color: #4b5563; }
+.detail-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem; }
+.old-val { color: #ef4444; text-decoration: line-through; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.new-val { color: #10b981; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arrow { color: #9ca3af; font-size: 0.7rem; }
 .action-buttons { display: flex; gap: 0.25rem; align-items: center; }
 .undo-btn { background: none; border: none; color: #9ca3af; cursor: pointer; padding: 0.5rem; border-radius: 0.375rem; }
 .undo-btn:hover { background: #fef2f2; color: #2563eb; }

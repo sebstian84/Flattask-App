@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import draggable from 'vuedraggable'
-import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut } from 'lucide-vue-next'
+import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2 } from 'lucide-vue-next'
 import Editor from './components/Editor.vue'
 import TodoItem from './components/TodoItem.vue'
 import BackupModal from './components/BackupModal.vue'
@@ -62,8 +62,9 @@ const isExclusive = ref(false)
 const aggregation = ref('none')
 const groupByTags = ref(false)
 const activeSort = ref({ by: 'order', dir: 'asc' })
+const showCompleted = ref(false)
 
-const newTodo = ref({ name: '', description: '', targetDate: '', tags: [] })
+const newTodo = ref({ name: '', description: '', targetDate: '', tags: [], status: 'offen' })
 const newTodoTagInput = ref('')
 const showNewForm = ref(false)
 
@@ -94,6 +95,7 @@ const fetchData = async () => {
     if (s.aggregation) aggregation.value = s.aggregation
     if (s.groupByTags !== undefined) groupByTags.value = s.groupByTags
     if (s.activeSort) activeSort.value = s.activeSort
+    if (s.showCompleted !== undefined) showCompleted.value = s.showCompleted
 
     isLoaded.value = true
   } catch (err) { console.error("Error fetching data", err) }
@@ -135,13 +137,14 @@ const syncSettings = async () => {
       isExclusive: isExclusive.value,
       aggregation: aggregation.value,
       groupByTags: groupByTags.value,
-      activeSort: activeSort.value
+      activeSort: activeSort.value,
+      showCompleted: showCompleted.value
     })
   } catch (err) { console.error("Error syncing settings", err) }
 }
 
 // Watch for setting changes
-watch([activeTags, isExclusive, aggregation, groupByTags, activeSort], syncSettings, { deep: true })
+watch([activeTags, isExclusive, aggregation, groupByTags, activeSort, showCompleted], syncSettings, { deep: true })
 
 const addTodo = () => {
   if (!newTodo.value.name) return
@@ -151,7 +154,7 @@ const addTodo = () => {
     newTodo.value.tags = newTodoTagInput.value.split(',').map(s => s.trim()).filter(Boolean)
   }
   todos.value.push({ ...newTodo.value, id, order })
-  newTodo.value = { name: '', description: '', targetDate: '', tags: [] }
+  newTodo.value = { name: '', description: '', targetDate: '', tags: [], status: 'offen' }
   newTodoTagInput.value = ''
   showNewForm.value = false
   syncTodos()
@@ -238,6 +241,9 @@ const getGroupLabel = (key) => {
 
 const filteredTodos = computed(() => {
   let result = [...todos.value]
+  if (!showCompleted.value) {
+    result = result.filter(t => t.status !== 'erledigt')
+  }
   if (activeTags.value.length > 0) {
     if (isExclusive.value) result = result.filter(t => activeTags.value.every(tag => t.tags && t.tags.includes(tag)))
     else result = result.filter(t => activeTags.value.some(tag => t.tags && t.tags.includes(tag)))
@@ -323,6 +329,7 @@ const resetAll = () => {
   activeTags.value = []
   isExclusive.value = false
   activeSort.value = { by: 'order', dir: 'asc' }
+  showCompleted.value = false
 }
 
 const handleReorder = (newList) => {
@@ -442,8 +449,15 @@ onMounted(() => {
               <Layers :size="14" /> Gruppieren
             </label>
           </div>
+
+          <div class="control-item">
+            <label class="toggle-label" title="Erledigte Aufgaben anzeigen">
+              <input type="checkbox" v-model="showCompleted" />
+              <CheckCircle2 :size="14" /> Erledigte
+            </label>
+          </div>
           
-          <button v-if="aggregation !== 'none' || groupByTags || activeTags.length" class="pure-button mini-btn secondary" @click="resetAll" title="Reset">
+          <button v-if="aggregation !== 'none' || groupByTags || activeTags.length || showCompleted" class="pure-button mini-btn secondary" @click="resetAll" title="Reset">
             <X :size="12" />
           </button>
 
@@ -480,7 +494,7 @@ onMounted(() => {
           <div class="pure-g">
             <div class="pure-u-1 pure-u-md-1-2" style="padding-right: 1rem">
               <label>Name</label>
-              <input v-model="newTodo.name" class="pure-u-1" type="text" required />
+              <input v-model="newTodo.name" class="pure-u-1" type="text" maxlength="150" required />
             </div>
             <div class="pure-u-1 pure-u-md-1-4" style="padding-right: 1rem">
               <label>Zieldatum</label>
