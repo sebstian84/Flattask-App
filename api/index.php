@@ -407,6 +407,22 @@ elseif ($path === '/changelog/clear' && $method === 'POST') {
     write_secure_file('changelog.json', ['changes' => []]);
     echo json_encode(['success' => true]);
 }
+elseif ($path === '/notes' && $method === 'GET') {
+    echo json_encode(read_secure_file('notes.json') ?: []);
+}
+elseif ($path === '/notes' && $method === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    write_secure_file('notes.json', $data);
+    echo json_encode(['success' => true]);
+}
+elseif ($path === '/notes/archive' && $method === 'GET') {
+    echo json_encode(read_secure_file('notes_archive.json') ?: new stdClass());
+}
+elseif ($path === '/notes/archive' && $method === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    write_secure_file('notes_archive.json', $data);
+    echo json_encode(['success' => true]);
+}
 else {
     http_response_code(404);
 }

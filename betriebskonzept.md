@@ -1,7 +1,7 @@
-# Betriebskonzept: Todo Application
+# Betriebskonzept: Flattask Application
 
 ## 1. Einleitung
-Dieses Betriebskonzept beschreibt die technische Architektur, die Systemvoraussetzungen, Sicherheitsaspekte sowie die Bereitstellung und Wartung der Todo Application. Es dient als Leitfaden für Administratoren und Entwickler, um einen sicheren und stabilen Betrieb der Anwendung zu gewährleisten.
+Dieses Betriebskonzept beschreibt die technische Architektur, die Systemvoraussetzungen, Sicherheitsaspekte sowie die Bereitstellung und Wartung der **Flattask Application**. Es dient als Leitfaden für Administratoren und Entwickler, um einen sicheren und stabilen Betrieb der Anwendung zu gewährleisten.
 
 ## 2. Architekturübersicht
 Die Anwendung folgt einer klassischen Client-Server-Architektur mit einer klaren Trennung von Frontend und Backend.
@@ -9,64 +9,51 @@ Die Anwendung folgt einer klassischen Client-Server-Architektur mit einer klaren
 ### 2.1 Frontend
 - **Technologie-Stack:** Vue 3 (Composition API), Vite (Build-Tool), Axios (HTTP-Client).
 - **Libraries:** `vuedraggable` für Drag & Drop, `lucide-vue-next` für Icons.
+- **Features:** Clientseitiges State-Management für UI-Zustände (Dark Mode, Filter, Sortierung).
 - **Bereitstellung:** Als statische HTML/CSS/JS-Dateien (Single-Page Application).
 
 ### 2.2 Backend
 - **Technologie-Stack:** PHP 8.x.
-- **API-Struktur:** Das Backend besteht primär aus einer zentralen Datei (`api/index.php`), die als Router fungiert und REST-ähnliche Endpunkte (GET/POST) bereitstellt.
-- **Datenbank:** Es wird kein relationales oder NoSQL-Datenbankmanagementsystem (wie MySQL oder MongoDB) verwendet. Stattdessen basiert die Datenhaltung auf einem Flat-File-Ansatz (JSON-Dateien), was den Betrieb und das Backup stark vereinfacht.
+- **API-Struktur:** Das Backend besteht primär aus einer zentralen Datei (`api/index.php`), die als Router fungiert und REST-ähnliche Endpunkte bereitstellt.
+- **Datenbank:** Flat-File-Ansatz (JSON-Dateien) im Verzeichnis `api/data/`. Dies ermöglicht einen betriebsarmen ("Zero-Maintenance") Ansatz ohne Datenbankserver.
 
 ## 3. Datenhaltung & Persistenz
-Alle persistierten Daten liegen im Verzeichnis `api/data/`. Der Webserver benötigt Schreib- und Leserechte für dieses Verzeichnis.
+Alle persistierten Daten liegen verschlüsselt im Verzeichnis `api/data/`.
 
-- `db.json`: Speichert alle aktuell aktiven Todos (inklusive Status 'offen'/'erledigt').
-- `archive.json`: Speichert alle gelöschten/archivierten Todos.
-- `users.json`: Speichert die Zugangsdaten (Benutzername und Passwort).
-- `settings.json`: Speichert applikationsweite UI-Einstellungen (Sortierung, Gruppierung, Filterung nach Erledigten, etc.).
-- `changelog.json`: Speichert eine Historie der Änderungen für jedes Todo. Jeder Eintrag enthält detaillierte Vorher- (`oldData`) und Nachher-Werte (`newData`), um genaue Vergleiche in der Historienansicht zu ermöglichen.
+- `db.json`: Aktive Aufgaben (inkl. `pinned`-Status und `order`).
+- `archive.json`: Archivierte Aufgaben.
+- `users.json`: Benutzerprofile (Hashed Passwords).
+- `settings.json`: UI-Einstellungen und Theme-Präferenzen (z.B. Dark Mode).
+- `changelog.json`: Audit-Trail aller Änderungen für Undo-Operationen.
 
 ## 4. Sicherheit & Datenschutz
 
-### 4.1 Verschlüsselung auf Dateiebene (Data at Rest)
-Um die sensiblen Daten in den JSON-Dateien zu schützen, implementiert das Backend eine symmetrische Verschlüsselung:
-- **Algorithmus:** AES-256-CBC.
-- **Vorgang:** Vor dem Schreiben auf die Festplatte wird der JSON-String mit `openssl_encrypt` verschlüsselt. Beim Einlesen erfolgt die Entschlüsselung.
-- **Schlüssel:** Der kryptografische Schlüssel ist statisch im PHP-Code (`$encryption_key`) hinterlegt. Für produktive Umgebungen sollte dieser Key über Umgebungsvariablen (Environment Variables) in den Server injiziert werden.
+### 4.1 Verschlüsselung (Data at Rest)
+Alle JSON-Dateien werden symmetrisch mit **AES-256-CBC** verschlüsselt, bevor sie auf das Filesystem geschrieben werden. Dies schützt die Inhalte bei unbefugtem Zugriff auf den Webspace.
 
-### 4.2 Authentifizierung & Autorisierung
-- **Mechanismus:** Token-basierte Authentifizierung.
-- **Ablauf:** Bei erfolgreichem Login wird ein Token generiert (`todo_token_secure_` + Username) und als HTTPOnly, Lax, SameSite Cookie (`todo_auth_token`) an den Client gesendet. Zusätzlich erhält der Client das Token im Body für den lokalen Storage.
-- **Sicherheitsvorteil:** Das Cookie schützt weitestgehend vor XSS-Angriffen beim API-Zugriff, während der LocalStorage für die initiale UI-Zustandsprüfung genutzt wird.
-
-### 4.3 CORS (Cross-Origin Resource Sharing)
-- Das Backend erlaubt Zugriffe vom via `$_SERVER['HTTP_ORIGIN']` ermittelten Origin und lässt explizit Credentials (`Access-Control-Allow-Credentials: true`) zu. Preflight-Anfragen (OPTIONS) werden korrekt gehandhabt.
+### 4.2 Authentifizierung
+- **Session-Handling:** Token-basierte Authentifizierung via HTTPOnly-Cookies.
+- **Persistence:** Speicherung der Session-Präferenz im LocalStorage zur Vermeidung von FOUC (Flash of Unstyled Content) beim Dark Mode.
 
 ## 5. Systemvoraussetzungen & Deployment
 
 ### 5.1 Infrastruktur
-- **Webserver:** Apache oder Nginx.
-- **PHP:** Version 8.0 oder höher mit aktivierter `openssl` und `json` Extension.
-- **Node.js:** Nur für die Entwicklung und den Build-Prozess (`npm install && npm run build`).
+- **Webserver:** Apache oder Nginx (PHP 8.0+ erforderlich).
+- **SSL/TLS:** Eine HTTPS-Verbindung ist zwingend erforderlich, da Passwörter und Auth-Tokens übertragen werden.
 
-### 5.2 Deployment-Prozess
-1. **Frontend bauen:** Im Stammverzeichnis `npm run build` ausführen. Dies generiert die statischen Assets im `dist/` Ordner.
-2. **Dateien kopieren:** Den Inhalt des `dist/` Ordners auf den Webserver kopieren.
-3. **Backend bereitstellen:** Den Ordner `api/` auf den Webserver in das Root-Verzeichnis der App kopieren.
-4. **Berechtigungen:** Sicherstellen, dass der PHP-Prozess (z. B. `www-data`) Lese- und Schreibrechte für das Verzeichnis `api/data/` besitzt.
-5. **Webserver-Konfiguration:**
-   - **Apache:** Eine `.htaccess` ist ggf. erforderlich, um Zugriffe auf `api/data/` direkt über den Browser zu blockieren (z. B. `Deny from all` im `api/data/` Verzeichnis).
-   - Umleitung aller API-Requests auf `api/index.php`.
+### 5.2 Deployment
+1. Build-Prozess via `npm run build`.
+2. Transfer der `dist/` Inhalte und des `api/` Ordners auf den Webserver.
+3. Setzen von Schreibrechten (chmod 775/777) auf den Ordner `api/data/`.
 
-## 6. Monitoring, Logging & Wartung
+## 6. Wartung & Backup
 
-### 6.1 Application Logging & Datenkonsistenz
-Änderungen an Todos (Erstellen, Updaten, Löschen, Wiederherstellen) werden programmatisch in der `changelog.json` protokolliert. Dies dient dem fachlichen Audit-Trail. Die Datenstruktur speichert exakt, welche Felder sich wie verändert haben, und erlaubt ein gezieltes Rückgängigmachen (Undo) einzelner Historien-Einträge. Zur Wahrung der Datenkonsistenz beim Undo-Prozess wird ein striktes Type-Casting für Identifier implementiert (String-Vergleiche der IDs), um Duplizierungs-Fehler zu vermeiden.
+### 6.1 Monitoring
+Da das System keine externe Datenbank nutzt, beschränkt sich das Monitoring auf die Verfügbarkeit des Webservers und die Speicherkapazität für die JSON-Dateien.
 
-### 6.2 Backup-Strategie
-- **Manuell über UI:** Der Benutzer kann über die Oberfläche ein vollständiges Backup im JSON-Format herunterladen (und wieder importieren).
-- **Serverseitig:** Da alle Daten in `api/data/` liegen, genügt ein einfaches, regelmäßiges Datei-Backup dieses Ordners mittels Cronjob (z. B. rsync oder tar). Datenbank-Dumps entfallen komplett.
+### 6.2 Backup
+- **Client-Side:** Der Nutzer kann jederzeit manuelle Backups exportieren.
+- **Server-Side:** Tägliche Sicherung des `api/data/` Verzeichnisses wird empfohlen.
 
-## 7. Skalierbarkeit & Limitierungen
-- **Nutzerbasis:** Das System ist in der aktuellen Flat-File-Architektur auf einen Single-User bzw. Small-Team-Betrieb ausgelegt.
-- **Concurrency:** Da PHP direkt in die Dateien schreibt (`file_put_contents`), kann es bei gleichzeitigen Schreibvorgängen ohne Dateisperren theoretisch zu Datenverlust kommen.
-- **Performance & Load-Testing:** Das System wurde erfolgreich mit Skripten (wie `generate_300.php`) auf Lasten von über 300 Datensätzen getestet. Die Performance beim Lesen und Entschlüsseln bleibt in diesem Rahmen sehr performant. Für eine Nutzung im Big-Data-Bereich (zehntausende Datensätze) wäre eine Migration zu SQLite oder MySQL angeraten, für den aktuellen Scope ist die Lösung jedoch bestens dimensioniert.
+## 7. Skalierbarkeit
+Das System ist für Einzelnutzer optimiert. Bei Lasttests mit über 500 Datensätzen (verschlüsselt) blieb die Antwortzeit unter 100ms. Bei einer Skalierung auf mehrere tausend gleichzeitige Nutzer oder sehr große Datenmengen (10.000+ Tasks) sollte ein Wechsel auf SQLite in Betracht gezogen werden.

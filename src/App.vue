@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import draggable from 'vuedraggable'
-import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2, ArrowDown, HelpCircle, Menu, Sun, Moon, BarChart3, AlertCircle, CheckCircle } from 'lucide-vue-next'
+import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2, ArrowDown, HelpCircle, Menu, Sun, Moon, BarChart3, AlertCircle, CheckCircle, Settings, StickyNote } from 'lucide-vue-next'
 import Editor from './components/Editor.vue'
 import TodoItem from './components/TodoItem.vue'
 import BackupModal from './components/BackupModal.vue'
@@ -11,8 +11,20 @@ const API_URL = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api/index.
 const AUTH_URL = import.meta.env.DEV ? 'http://localhost:8000/api/auth' : '/api/index.php/auth'
 
 const isAuthenticated = ref(!!localStorage.getItem('todo_token'))
-const loginData = ref({ username: 'frost0xx', password: '' })
+const loginData = ref({ username: 'sebastian', password: '' })
 const loginError = ref('')
+
+const notes = ref({})
+const archivedNotes = ref({})
+const todayKey = computed(() => new Date().toISOString().split('T')[0])
+const isSavingNotes = ref(false)
+const expandedPastNoteKeys = ref([]) // IDs of expanded past notes
+
+const userSettings = ref({
+  rowHeight: 2.5, // rem
+  fontSize: 0.9,  // rem
+  compactMode: false
+})
 
 // Axios config
 axios.defaults.withCredentials = true
@@ -21,6 +33,16 @@ axios.interceptors.request.use(config => {
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
+
+const applyVisualSettings = () => {
+  document.documentElement.style.setProperty('--todo-row-height', `${userSettings.value.rowHeight}rem`)
+  document.documentElement.style.setProperty('--todo-font-size', `${userSettings.value.fontSize}rem`)
+}
+
+watch(userSettings, (newSettings) => {
+  localStorage.setItem('flattask_settings', JSON.stringify(newSettings))
+  applyVisualSettings()
+}, { deep: true })
 
 axios.interceptors.response.use(
   res => res,
@@ -63,6 +85,15 @@ const aggregation = ref('none')
 const groupByTags = ref(false)
 const activeSort = ref({ by: 'order', dir: 'asc' })
 const showCompleted = ref(false)
+const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
+
+// Initial load of settings
+const savedSettings = localStorage.getItem('flattask_settings')
+if (savedSettings) {
+  try {
+    userSettings.value = { ...userSettings.value, ...JSON.parse(savedSettings) }
+  } catch (e) { console.error("Error parsing settings", e) }
+}
 
 const newTodo = ref({ name: '', description: '', targetDate: '', tags: [], status: 'offen' })
 const newTodoTagInput = ref('')
@@ -301,7 +332,13 @@ const groupedTodos = computed(() => {
     return a.localeCompare(b)
   })
   sortedTimeKeys.forEach(timeKey => {
-    const itemsInTimeGroup = timeGroups[timeKey]
+    let itemsInTimeGroup = timeGroups[timeKey]
+    // Sort items within group by pinned, then order
+    itemsInTimeGroup.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1
+      if (!a.pinned && b.pinned) return 1
+      return a.order - b.order
+    })
     if (groupByTags.value) {
       const tagMap = {}
       itemsInTimeGroup.forEach(todo => {
@@ -327,14 +364,22 @@ const groupedTodos = computed(() => {
 const sortedTodos = computed(() => {
   if (aggregation.value !== 'none' || groupByTags.value) return []
   let result = [...filteredTodos.value]
-  if (activeSort.value.by === 'targetDate') {
-    result.sort((a, b) => {
+  
+  // Primary sort by pinned
+  result.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1
+    if (!a.pinned && b.pinned) return 1
+    
+    // Secondary sort by chosen criteria
+    if (activeSort.value.by === 'targetDate') {
       if (!a.targetDate && !b.targetDate) return 0
       if (!a.targetDate) return 1; if (!b.targetDate) return -1
       const timeA = new Date(a.targetDate).getTime(); const timeB = new Date(b.targetDate).getTime()
       return activeSort.value.dir === 'asc' ? timeA - timeB : timeB - timeA
-    })
-  } else { result.sort((a, b) => a.order - b.order) }
+    } else { 
+      return a.order - b.order 
+    }
+  })
   return result
 })
 
@@ -461,7 +506,12 @@ const handleImported = () => {
 const userMenuContainer = ref(null)
 
 onMounted(() => {
-  if (isAuthenticated.value) fetchData()
+  applyVisualSettings()
+  if (isAuthenticated.value) {
+    fetchData()
+    fetchNotes()
+    fetchArchivedNotes()
+  }
   
   // Close user menu on click away
   document.addEventListener('click', (e) => {
@@ -471,7 +521,6 @@ onMounted(() => {
   })
 })
 
-const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
 const toggleDarkMode = () => {
   isDarkMode.value = !isDarkMode.value
   localStorage.setItem('darkMode', isDarkMode.value)
@@ -510,6 +559,92 @@ const stats = computed(() => {
     
   return { total, completed, pending, percent, overdue, topTags }
 })
+
+const fetchNotes = async () => {
+  try {
+    const res = await axios.get(`${API_URL}/notes`)
+    notes.value = res.data || {}
+  } catch (err) { console.error("Error fetching notes", err) }
+}
+
+const fetchArchivedNotes = async () => {
+  try {
+    const res = await axios.get(`${API_URL}/notes/archive`)
+    archivedNotes.value = res.data || {}
+  } catch (err) { console.error("Error fetching archived notes", err) }
+}
+
+const saveNotes = async () => {
+  isSavingNotes.value = true
+  try {
+    await axios.post(`${API_URL}/notes`, notes.value)
+  } catch (err) { console.error("Error saving notes", err) }
+  finally { isSavingNotes.value = false }
+}
+
+const saveArchivedNotes = async () => {
+  try {
+    await axios.post(`${API_URL}/notes/archive`, archivedNotes.value)
+  } catch (err) { console.error("Error saving archived notes", err) }
+}
+
+// Debounced save for notes
+let notesSaveTimeout = null
+watch(notes, () => {
+  if (notesSaveTimeout) clearTimeout(notesSaveTimeout)
+  notesSaveTimeout = setTimeout(saveNotes, 1000)
+}, { deep: true })
+
+const updatePastNote = (dateKey, content) => {
+  notes.value[dateKey] = content
+  saveNotes()
+}
+
+const deleteNote = (key) => {
+  if (confirm(`Möchtest du die Notiz vom ${new Date(key).toLocaleDateString()} wirklich archivieren?`)) {
+    archivedNotes.value = { ...archivedNotes.value, [key]: notes.value[key] }
+    const newNotes = { ...notes.value }
+    delete newNotes[key]
+    notes.value = newNotes
+    saveNotes()
+    saveArchivedNotes()
+  }
+}
+
+const highlightNotesSearch = (text) => {
+  if (!searchQuery.value || !text) return text
+  const q = searchQuery.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const reg = new RegExp(`(${q})`, 'gi')
+  return text.replace(reg, '<span class="highlight">$1</span>')
+}
+
+const pastNoteKeys = computed(() => {
+  return Object.keys(notes.value)
+    .filter(key => key < todayKey.value)
+    .sort((a, b) => b.localeCompare(a))
+})
+
+const filteredPastNoteKeys = computed(() => {
+  if (!searchQuery.value) return pastNoteKeys.value
+  const q = searchQuery.value.toLowerCase()
+  return pastNoteKeys.value.filter(key => {
+    const content = (notes.value[key] || '').toLowerCase()
+    const dateStr = new Date(key).toLocaleDateString('de-DE').toLowerCase()
+    return content.includes(q) || dateStr.includes(q) || key.includes(q)
+  })
+})
+
+const togglePastNote = (key) => {
+  if (expandedPastNoteKeys.value.includes(key)) {
+    expandedPastNoteKeys.value = expandedPastNoteKeys.value.filter(k => k !== key)
+  } else {
+    expandedPastNoteKeys.value.push(key)
+  }
+}
+
+const pinnedTodos = computed(() => {
+  return todos.value.filter(t => t.pinned && t.status !== 'erledigt')
+})
 </script>
 
 <template>
@@ -528,10 +663,15 @@ const stats = computed(() => {
             </svg>
           </div>
           <h1 class="logo">Flattask</h1>
-          <button class="dark-mode-toggle" @click="toggleDarkMode" :title="isDarkMode ? 'Heller Modus' : 'Dunkler Modus'">
-            <Sun v-if="isDarkMode" :size="14" />
-            <Moon v-else :size="14" />
-          </button>
+          <div class="nav-icons-group">
+            <button class="dark-mode-toggle" @click="toggleDarkMode" :title="isDarkMode ? 'Heller Modus' : 'Dunkler Modus'">
+              <Sun v-if="isDarkMode" :size="14" />
+              <Moon v-else :size="14" />
+            </button>
+            <button class="nav-icon-btn" :class="{ active: currentView === 'notes' }" @click="currentView = currentView === 'notes' ? 'main' : 'notes'" title="Notizen & Tagebuch">
+              <StickyNote :size="16" />
+            </button>
+          </div>
         </div>
 
         <!-- Scrollable Filters -->
@@ -600,6 +740,9 @@ const stats = computed(() => {
             </button>
             <div v-if="showUserMenu" class="user-dropdown card slim" @click.stop>
               <div class="dropdown-header">Admin Menu</div>
+              <button class="dropdown-item" @click="currentView = 'settings'; showUserMenu = false">
+                <Settings :size="12" /> Einstellungen
+              </button>
               <button class="dropdown-item" @click="currentView = 'profile'; showUserMenu = false">
                 <User :size="12" /> Zugangsdaten
               </button>
@@ -640,10 +783,15 @@ const stats = computed(() => {
             </svg>
           </div>
           <h1 class="logo mobile-logo">Flattask</h1>
-          <button class="dark-mode-toggle mini" @click="toggleDarkMode">
-            <Sun v-if="isDarkMode" :size="12" />
-            <Moon v-else :size="12" />
-          </button>
+          <div class="mobile-nav-icons">
+             <button class="dark-mode-toggle mini" @click="toggleDarkMode">
+               <Sun v-if="isDarkMode" :size="16" />
+               <Moon v-else :size="16" />
+             </button>
+             <button class="dark-mode-toggle mini" @click="currentView = currentView === 'notes' ? 'main' : 'notes'">
+               <StickyNote :size="16" />
+             </button>
+          </div>
         </div>
         
         <div class="mobile-quick-actions">
@@ -663,6 +811,16 @@ const stats = computed(() => {
          <button class="pure-button mini-btn secondary" @click="searchExpanded = false">
             <X :size="14" />
          </button>
+      </div>
+    </div>
+
+    <!-- Pinned Aggregation Section -->
+    <div v-if="pinnedTodos.length > 0 && currentView === 'main'" class="pinned-aggregation card slim">
+      <div class="pinned-header">
+        <Pin :size="14" fill="currentColor" /> Angeheftete Aufgaben
+      </div>
+      <div class="pinned-items">
+        <TodoItem v-for="todo in pinnedTodos" :key="'pinned-' + todo.id" :todo="todo" :all-tags="allTags" :can-drag="false" :search-query="searchQuery" @update="(updates) => updateTodo(todo.id, updates)" @delete="deleteTodo(todo.id)" />
       </div>
     </div>
 
@@ -720,6 +878,9 @@ const stats = computed(() => {
              <button v-if="aggregation !== 'none' || groupByTags || activeTags.length || showCompleted" class="pure-button mini-btn secondary drawer-btn" @click="resetAll">
                <X :size="14" /> Alle Filter zurücksetzen
              </button>
+             <button class="pure-button mini-btn secondary drawer-btn" @click="currentView = 'settings'; mobileMenuOpen = false">
+                <Settings :size="14" /> Einstellungen
+              </button>
              <button class="pure-button mini-btn secondary drawer-btn" @click="currentView = 'stats'; mobileMenuOpen = false">
                 <BarChart3 :size="14" /> Statistik Dashboard
               </button>
@@ -896,7 +1057,109 @@ const stats = computed(() => {
       </div>
     </div>
 
-    <BackupModal :show="showBackupModal" :all-tags="allTags" @close="showBackupModal = false" @imported="handleImported" @revived="handleRevived" />
+    <!-- Settings View -->
+    <div v-if="currentView === 'settings' && isAuthenticated" class="settings-view">
+      <div class="dashboard-header">
+        <h2><Settings :size="24" /> Optische Einstellungen</h2>
+        <button class="pure-button mini-btn secondary" @click="currentView = 'main'">Zurück zur Liste</button>
+      </div>
+
+      <div class="card settings-container">
+        <div class="settings-grid">
+          <!-- Row Height -->
+          <div class="settings-item">
+            <div class="settings-info">
+              <label>Zeilenhöhe der Aufgaben</label>
+              <span class="settings-desc">Passen Sie den vertikalen Abstand der Aufgaben an.</span>
+            </div>
+            <div class="settings-control">
+              <input type="range" min="1.8" max="4.5" step="0.1" v-model="userSettings.rowHeight" class="range-slider" />
+              <span class="value-display">{{ userSettings.rowHeight }}rem</span>
+            </div>
+          </div>
+
+          <!-- Font Size -->
+          <div class="settings-item">
+            <div class="settings-info">
+              <label>Schriftgröße</label>
+              <span class="settings-desc">Größe des Aufgabentitels anpassen.</span>
+            </div>
+            <div class="settings-control">
+              <input type="range" min="0.7" max="1.2" step="0.05" v-model="userSettings.fontSize" class="range-slider" />
+              <span class="value-display">{{ userSettings.fontSize }}rem</span>
+            </div>
+          </div>
+
+          <!-- Compact Mode -->
+          <div class="settings-item">
+            <div class="settings-info">
+              <label>Kompakt-Modus</label>
+              <span class="settings-desc">Reduziert Abstände und Ränder für maximale Übersicht.</span>
+            </div>
+            <div class="settings-control">
+               <label class="toggle-switch">
+                  <input type="checkbox" v-model="userSettings.compactMode" />
+                  <span class="slider round"></span>
+               </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-preview mt-4">
+          <h3>Vorschau</h3>
+          <div class="preview-box" :class="{ 'compact': userSettings.compactMode }">
+            <div class="preview-item">Beispiel Aufgabe 1</div>
+            <div class="preview-item">Beispiel Aufgabe 2 (Aktiv)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes View -->
+    <div v-if="currentView === 'notes' && isAuthenticated" class="notes-view">
+      <div class="dashboard-header">
+        <h2><StickyNote :size="24" /> Notizen & Tagebuch</h2>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <span v-if="isSavingNotes" class="save-indicator">Wird gespeichert...</span>
+          <button class="pure-button mini-btn secondary" @click="currentView = 'main'">Zurück</button>
+        </div>
+      </div>
+
+      <div class="notes-container">
+        <!-- Today's Note -->
+        <div class="card notes-editor-card">
+          <div class="note-date-header">Heute, {{ new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) }}</div>
+          <Editor v-model="notes[todayKey]" placeholder="Was beschäftigt dich heute? Schreibe hier deine Notizen..." />
+        </div>
+
+        <!-- Past Notes -->
+        <div v-if="filteredPastNoteKeys.length > 0" class="past-notes-section">
+          <h3>Vergangene Einträge <span v-if="searchQuery" class="search-result-count">({{ filteredPastNoteKeys.length }} Treffer)</span></h3>
+          <div class="past-notes-list">
+            <div v-for="key in filteredPastNoteKeys" :key="key" class="card past-note-card collapsible" :class="{ expanded: expandedPastNoteKeys.includes(key) }">
+              <div class="note-header-clickable" @click="togglePastNote(key)">
+                <div class="note-date-header mini">{{ new Date(key).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }) }}</div>
+                <div v-if="!expandedPastNoteKeys.includes(key)" class="note-snippet" v-html="highlightNotesSearch((notes[key] || 'Kein Inhalt').substring(0, 150)) + '...'"></div>
+                <div class="note-actions">
+                  <button class="pure-button btn-icon small btn-danger" @click.stop="deleteNote(key)" title="Archivieren"><Trash2 :size="12" /></button>
+                  <ChevronDown v-if="!expandedPastNoteKeys.includes(key)" :size="14" class="collapse-icon" />
+                  <ChevronUp v-else :size="14" class="collapse-icon" />
+                </div>
+              </div>
+              <div v-if="expandedPastNoteKeys.includes(key)" class="note-expanded-editor">
+                <Editor v-model="notes[key]" @blur="saveNotes" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else class="empty-state">
+          <template v-if="searchQuery">Keine Notizen für "{{ searchQuery }}" gefunden.</template>
+          <template v-else>Noch keine vergangenen Einträge vorhanden.</template>
+        </div>
+      </div>
+    </div>
+
+    <BackupModal :show="showBackupModal" :all-tags="allTags" :archived-notes="archivedNotes" @close="showBackupModal = false" @imported="handleImported" @revived="handleRevived" @notes-revived="fetchNotes(); fetchArchivedNotes()" />
 
     <!-- Login Modal -->
     <div v-if="!isAuthenticated" class="modal-overlay login-overlay">
@@ -927,6 +1190,15 @@ const stats = computed(() => {
 .top-bar-inner { display: flex; align-items: center; gap: 0.5rem; width: 100%; min-height: 2rem; justify-content: space-between; }
 .logo-area { flex-shrink: 0; }
 .logo { font-size: 0.95rem; margin: 0; line-height: 2rem; white-space: nowrap; font-weight: 800; color: var(--primary); }
+.nav-icons-group { display: flex; align-items: center; gap: 0.25rem; }
+.nav-icon-btn { background: transparent; border: none; color: #9ca3af; cursor: pointer; padding: 0.3rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.nav-icon-btn:hover { background: #f3f4f6; color: var(--primary); }
+.nav-icon-btn.active { color: var(--primary); background: rgba(59, 130, 246, 0.1); }
+.dark-mode .nav-icon-btn:hover { background: #374151; }
+.dark-mode-toggle { background: transparent; border: none; color: #9ca3af; cursor: pointer; padding: 0.3rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.dark-mode-toggle:hover { background: #f3f4f6; color: var(--primary); }
+.dark-mode-toggle.mini { padding: 0.2rem; }
+.dark-mode .dark-mode-toggle:hover { background: #374151; }
 
 .scrollable-filters { flex: 1 1 auto; display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
 .scrollable-filters::-webkit-scrollbar { display: none; }
@@ -998,7 +1270,9 @@ const stats = computed(() => {
   }
   .mobile-top-bar-inner { display: flex; align-items: center; justify-content: space-between; width: 100%; position: relative; }
   
-  .hamburger-btn { background: transparent; border: none; padding: 0.3rem; display: flex; align-items: center; justify-content: center; }
+   .hamburger-btn { background: transparent; border: none; padding: 0.3rem; display: flex; align-items: center; justify-content: center; }
+  .logo-group { display: flex; align-items: center; gap: 0.5rem; }
+  .mobile-nav-icons { display: flex; align-items: center; gap: 0.25rem; }
   .mobile-logo { font-size: 1.25rem; font-weight: 800; color: var(--text-heading); margin: 0; letter-spacing: -0.025em; }
   .flattask-logo { color: var(--text-heading); display: flex; align-items: center; justify-content: center; margin-right: 0.5rem; }
   .flattask-logo.mini { margin-right: 0.4rem; }
@@ -1156,7 +1430,70 @@ const stats = computed(() => {
 .text-center { text-align: center; }
 .mt-2 { margin-top: 0.5rem; }
 .stats-dashboard { padding: 1rem; }
+.pinned-aggregation { 
+  margin-bottom: 1rem; 
+  border-left: 4px solid var(--primary); 
+  padding: 0.5rem 0.75rem !important; 
+  background: var(--bg-card) !important; 
+  position: sticky; 
+  top: 3.2rem; 
+  z-index: 999; 
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+@media (max-width: 768px) {
+  .pinned-aggregation { top: 2.8rem; }
+}
+.dark-mode .pinned-aggregation { background: var(--bg-card) !important; }
+.pinned-header { font-size: 0.7rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem; padding-left: 0.2rem; }
+.pinned-items { display: flex; flex-direction: column; gap: 0.25rem; }
+
 .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
+.settings-view { padding: 1rem; max-width: 800px; margin: 0 auto; }
+.settings-container { padding: 2rem; }
+.settings-grid { display: flex; flex-direction: column; gap: 2rem; }
+.settings-item { display: flex; justify-content: space-between; align-items: center; gap: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); }
+.settings-item:last-child { border-bottom: none; }
+.settings-info { flex: 1; }
+.settings-info label { display: block; font-weight: 600; color: var(--text-heading); margin-bottom: 0.25rem; }
+.settings-desc { font-size: 0.85rem; color: var(--text-muted); }
+.settings-control { display: flex; align-items: center; gap: 1rem; min-width: 250px; }
+.range-slider { flex: 1; accent-color: var(--primary); cursor: pointer; }
+.value-display { font-family: monospace; font-size: 0.9rem; color: var(--primary); font-weight: 700; min-width: 3rem; text-align: right; }
+
+/* Toggle Switch */
+.toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #d1d5db; transition: .4s; border-radius: 24px; }
+.slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+input:checked + .slider { background-color: var(--primary); }
+input:checked + .slider:before { transform: translateX(20px); }
+
+.settings-preview { margin-top: 2rem; padding-top: 2rem; border-top: 2px dashed var(--border-color); }
+.preview-box { border: 1px solid var(--border-color); border-radius: 0.5rem; overflow: hidden; background: var(--bg-app); }
+.preview-item { height: var(--todo-row-height); padding: 0 1rem; display: flex; align-items: center; border-bottom: 1px solid var(--border-color); font-size: var(--todo-font-size); color: var(--text-main); }
+.preview-box.compact .preview-item { padding: 0 0.5rem; }
+
+/* Notes Styles */
+.notes-view { padding: 1rem; max-width: 900px; margin: 0 auto; }
+.notes-container { display: flex; flex-direction: column; gap: 2rem; }
+.notes-editor-card { padding: 1.5rem; border-top: 4px solid var(--primary); }
+.note-date-header { font-size: 0.75rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+.note-date-header.mini { font-size: 0.65rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+.save-indicator { font-size: 0.75rem; color: var(--text-muted); font-style: italic; }
+.past-notes-section h3 { font-size: 1rem; color: var(--text-heading); margin-bottom: 1rem; }
+.past-notes-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.past-note-card { padding: 0.75rem 1rem; border-left: 3px solid var(--border-color); transition: all 0.2s; cursor: default; }
+.past-note-card.collapsible:hover { border-left-color: var(--primary); background: var(--bg-app); }
+.past-note-card.expanded { border-left-color: var(--primary); padding: 1rem; }
+.note-header-clickable { display: flex; align-items: center; gap: 1rem; cursor: pointer; flex: 1; }
+.note-snippet { flex: 1; font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+.note-snippet :deep(.highlight) { background: #fde047; color: #000; border-radius: 2px; padding: 0 1px; }
+.dark-mode .note-snippet :deep(.highlight) { background: #ca8a04; color: #fff; }
+.note-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+.collapse-icon { color: var(--text-muted); }
+.note-expanded-editor { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
+.search-result-count { font-size: 0.8rem; font-weight: normal; color: var(--text-muted); margin-left: 0.5rem; }
+
 .dashboard-header h2 { margin: 0; display: flex; align-items: center; gap: 0.75rem; color: var(--text-heading); }
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
 .stat-card { display: flex; flex-direction: column; justify-content: center; padding: 1.5rem; transition: transform 0.2s; }

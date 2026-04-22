@@ -1,57 +1,67 @@
-# Fachkonzept: Todo Application
+# Fachkonzept: Flattask Application
 
 ## 1. Einleitung und Zielsetzung
-Die vorliegende Anwendung ist eine webbasierte, Single-Page Application (SPA) zur Verwaltung von Aufgaben (Todos). Ziel ist es, dem Nutzer ein intuitives, schnelles und hochgradig anpassbares Werkzeug für das persönliche oder berufliche Task-Management zur Verfügung zu stellen. Die Applikation zeichnet sich durch flexible Gruppierungs- und Filterfunktionen, Drag-and-Drop-Unterstützung sowie ein integriertes Tag-System aus.
+Die vorliegende Anwendung **Flattask** ist eine webbasierte, Single-Page Application (SPA) zur Verwaltung von Aufgaben (Todos). Ziel ist es, dem Nutzer ein intuitives, schnelles und hochgradig anpassbares Werkzeug für das persönliche oder berufliche Task-Management zur Verfügung zu stellen. Die Applikation zeichnet sich durch flexible Gruppierungs- und Filterfunktionen, Drag-and-Drop-Unterstützung sowie ein integriertes Tag-System aus. Besonderes Augenmerk liegt auf der Geschwindigkeit im Workflow (Effizienz) und einer klaren, modernen Ästhetik.
 
 ## 2. Zielgruppe & Anwendungsbereich
-Die Anwendung richtet sich in ihrer aktuellen Ausprägung primär an Einzelnutzer (Single-User-Betrieb), die eine datenschutzfreundliche und leichtgewichtige Lösung zur Aufgabenverwaltung suchen. Der Anwendungsbereich erstreckt sich von einfachen Einkaufslisten bis hin zur Organisation komplexer, terminierter Projekte mittels Kalenderwochen- oder Monatsgruppierungen.
+Die Anwendung richtet sich primär an Einzelnutzer, die eine datenschutzfreundliche und leichtgewichtige Lösung zur Aufgabenverwaltung suchen. Der Anwendungsbereich erstreckt sich von einfachen Einkaufslisten bis hin zur Organisation komplexer, terminierter Projekte mittels Kalenderwochen- oder Monatsgruppierungen.
 
 ## 3. Funktionsübersicht
 
-### 3.1 Todo-Verwaltung (CRUD)
-- **Erstellen:** Neue Aufgaben können mit einem Titel (max. 150 Zeichen), einem optionalen Zieldatum, einer Rich-Text-Beschreibung, Tags und einem Status angelegt werden.
+### 3.1 Todo-Verwaltung (CRUD & Workflow)
+- **Erstellen:** Neue Aufgaben können mit einem Titel (max. 500 Zeichen), einem optionalen Zieldatum, einer Rich-Text-Beschreibung, Tags und einem Status angelegt werden.
 - **Lesen & Anzeigen:** Aufgaben werden übersichtlich in einer Liste oder gruppiert dargestellt. Jeder Task hat einen Status (offen oder erledigt).
-- **Aktualisieren:** Inline-Bearbeitung von Titel, Zieldatum, Status und Beschreibung. Die Rich-Text-Beschreibung kann per Klick im ausgeklappten Bereich direkt angepasst werden.
-- **Löschen & Archivieren:** Aufgaben werden nicht sofort physisch gelöscht, sondern in ein Archiv verschoben. Aus dem Archiv können sie dauerhaft gelöscht oder wiederhergestellt werden.
+- **Aktualisieren:** Inline-Bearbeitung von Titel, Zieldatum, Status und Tags. Die Bearbeitung erfolgt nahtlos ohne modale Dialoge.
+- **Auto-Save (Save-on-Blur):** Änderungen an Titeln, Tags oder Beschreibungen werden automatisch gespeichert, sobald das Eingabefeld den Fokus verliert (Klick außerhalb).
+- **Löschen & Archivieren:** Aufgaben werden in ein Archiv verschoben, um die Hauptliste sauber zu halten. Aus dem Archiv können sie dauerhaft gelöscht oder wiederhergestellt werden.
 
 ### 3.2 Strukturierung & Organisation
 - **Tag-System:** Todos können mit mehreren Tags versehen werden. Eine Autovervollständigung (Suggested Tags) erleichtert die Zuweisung.
-- **Filterung & Suche:** Die Ansicht kann nach einem oder mehreren Tags gefiltert werden (inklusive oder exklusive Logik). Zudem können Aufgaben mit dem Status "erledigt" über einen zentralen Toggle-Button ein- oder ausgeblendet werden. Eine intelligente Freitextsuche scannt Titel und Beschreibung, um bestimmte Todos in Echtzeit zu finden.
-- **Gruppierung:** Aufgaben können dynamisch gruppiert werden nach:
-  - **Zeitlich:** Täglich, Wöchentlich (Kalenderwochen), Monatlich. Bei aktiver Zeit-Gruppierung existiert eine "Quick-Jump"-Funktion, um direkt zum aktuellen Zeitraum zu springen.
-  - **Thematisch:** Nach Tags.
-- **Sortierung:** Eine manuelle Sortierung per Drag-and-Drop ist möglich (sofern keine speziellen Filter/Gruppierungen aktiv sind), alternativ kann nach Zieldatum sortiert werden.
+- **Anheften (Pinning):** Wichtige Aufgaben können "angepinnt" werden. Diese werden in der regulären Liste blau hervorgehoben und zusätzlich in einer speziellen Favoriten-Aggregation am oberen Bildschirmrand angezeigt.
+- **Filterung & Suche:** 
+  - Filterung nach Tags (Inklusive/Exklusive Logik).
+  - Ein-/Ausblenden erledigter Aufgaben.
+  - **Echtzeit-Suche mit Highlighting:** Eine intelligente Freitextsuche scannt Titel und Beschreibung. Treffer werden im Titel visuell hervorgehoben.
+- **Gruppierung:** Dynamische Ansichten nach Zeit (Tag, Woche, Monat) oder Tags.
+- **Sortierung:** Manuelle Sortierung per Drag-and-Drop oder automatische Sortierung nach Zieldatum. Angepinnte Aufgaben werden innerhalb ihrer Gruppen stets priorisiert.
 
 ### 3.3 Benutzeroberfläche & Interaktion (UI/UX)
-- **Responsive Design:** Die Oberfläche passt sich dynamisch an Desktop- und Mobilgeräte an. Für mobile Endgeräte (Smartphones) wird ein platzsparendes Hamburger-Menü (Drawer) verwendet, welches alle Filter, Tags und Einstellungen beinhaltet, um die Übersichtlichkeit zu wahren.
-- **Floating Search:** Das Suchfeld ist platzsparend als ausfahrbares Floating-Element implementiert.
-- **Drag & Drop:** Aufgaben können per Maus oder Touch-Gesten frei verschoben oder zwischen verschiedenen Gruppierungen (z. B. von einer Kalenderwoche in die nächste) umverteilt werden, wobei sich das Zieldatum automatisch anpasst.
-- **Rich-Text Editor:** Für detailreiche Beschreibungen der Aufgaben.
+- **Sticky Navigation & Favoriten:** Die Filterleiste und die Liste der angepinnten Aufgaben bleiben beim Scrollen am oberen Rand fixiert, während die restliche Liste darunter hindurchgleitet.
+- **Dark Mode:** Ein systemweiter Dunkelmodus kann über einen minimalistischen Schalter in der Navigation aktiviert werden. Die Einstellung wird dauerhaft gespeichert.
+- **Dynamisches Title-Scaling:** Die Schriftgröße des Aufgabentitels passt sich automatisch an dessen Länge an, um ein Umbrechen zu verhindern und die Einzeiligkeit zu wahren.
+- **Truncation & Tooltips:** Sehr lange Titel werden mit "..." gekürzt. Beim Hovern erscheint sofort ein Tooltip mit dem vollständigen Text.
+- **Responsive Design:** Optimierte Darstellung für Desktop und Mobilgeräte (Hamburger-Menü, Touch-Optimierung).
 
-### 3.4 Authentifizierung & Profilverwaltung
-- Ein Login-System schützt die Daten vor unbefugtem Zugriff.
-- Der Benutzername und das Passwort können über die Profilverwaltung innerhalb der App geändert werden.
+### 3.4 Statistik-Dashboard
+Ein dediziertes Dashboard bietet einen Überblick über die eigene Produktivität:
+- **Fortschritt:** Visuelle Anzeige der Erledigungsquote in Prozent.
+- **Kennzahlen:** Übersicht über Gesamtzahl, offene, erledigte und überfällige Aufgaben.
+- **Tag-Verteilung:** Analyse der am häufigsten genutzten Tags als Balkendiagramm.
 
-### 3.5 Backup, Wiederherstellung & Historie
-- Die Anwendung bietet eine integrierte Exportfunktion für Todos, Archiv und Einstellungen.
-- Ein Import-Dialog ermöglicht die Wiederherstellung, wobei Duplikate übersprungen werden.
-- **Historie (Changelog):** Jede Änderung (Anlage, Bearbeitung, Löschung) an einem Task wird protokolliert. In der Historien-Ansicht können die Änderungen (Alte vs. Neue Werte) detailliert eingesehen werden. Einträge lassen sich gezielt rückgängig machen oder löschen.
+### 3.5 Authentifizierung & Profilverwaltung
+- Sicherer Login zum Schutz der Daten.
+- Verwaltung von Benutzernamen und Passwörtern direkt in der App.
 
-## 4. Datenmodell (Logische Struktur)
+### 3.6 Backup, Archiv & Historie
+- **Export/Import:** Vollständige Sicherung aller Daten (inkl. Archiv und Historie) als JSON-Datei.
+- **Archiv-Management:** Funktion zum endgültigen Leeren des gesamten Archivs in einem Schritt.
+- **Historie (Changelog):** Lückenlose Protokollierung aller Änderungen mit Detailansicht (Vorher/Nachher) und Undo-Funktionalität.
+
+## 4. Datenmodell (Erweiterte Struktur)
 
 - **Todo-Objekt:**
   - `id`: Eindeutiger Identifier (Timestamp).
-  - `name`: Kurztitel der Aufgabe (max. 150 Zeichen).
+  - `name`: Titel (max. 500 Zeichen).
   - `description`: Detaillierte Beschreibung (HTML/Rich-Text).
-  - `targetDate`: Optionales Fälligkeits- oder Zieldatum (YYYY-MM-DD).
+  - `targetDate`: Optionales Zieldatum (YYYY-MM-DD).
   - `tags`: Array von Strings.
-  - `status`: Zustand des Tasks ('offen' oder 'erledigt').
-  - `order`: Integer für die manuelle Sortierreihenfolge.
-- **Settings-Objekt:**
-  - Speichert UI-Zustände (aktive Tags, Gruppierungsart, Sortierung), um diese sitzungsübergreifend beizubehalten.
-- **Changelog-Objekt:**
-  - Protokolliert Änderungen an Todos (Erstellung, Aktualisierung, Löschung) für eine spätere Nachvollziehbarkeit oder Undo-Funktionen.
+  - `status`: 'offen' oder 'erledigt'.
+  - `pinned`: Boolean (wahr/falsch).
+  - `order`: Integer für Sortierung.
+- **Settings-Objekt:** Speichert UI-Zustände und Themes (z.B. Dark Mode Präferenz).
+- **Changelog-Objekt:** Detaillierte Änderungshistorie für Audit-Trail und Undo.
 
-## 5. Abnahmekriterien & Qualitätssicherung
-- Alle Änderungen (Erstellen, Verschieben, Löschen) müssen sofort (optimistisch) im UI reflektiert und asynchron im Backend gesichert werden.
-- Die mobile Ansicht muss die volle Funktionalität der Desktop-Ansicht bieten (insbesondere Drag & Drop).
+## 5. Qualitätssicherung
+- **Performance:** Die App ist auf Schnelligkeit optimiert (minimale Ladezeiten, flüssiges Scrollen).
+- **Datenkonsistenz:** Transaktionale Speicherung der Flat-Files im Backend zur Vermeidung von Datenverlust.
+- **Barrierefreiheit:** Kontrastreiche Darstellung (insb. im Dark Mode) und intuitive Bedienbarkeit.

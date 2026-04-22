@@ -1,14 +1,15 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { Download, Upload, X, RotateCcw, Archive, Clock, Trash2 } from 'lucide-vue-next'
 
 const props = defineProps({
   show: Boolean,
-  allTags: Array
+  allTags: Array,
+  archivedNotes: Object
 })
 
-const emit = defineEmits(['close', 'imported', 'revived'])
+const emit = defineEmits(['close', 'imported', 'revived', 'notes-revived'])
 
 const API_URL = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api/index.php'
 const isLoading = ref(false)
@@ -18,14 +19,24 @@ const fileInput = ref(null)
 const activeTab = ref('backup')
 const changelog = ref([])
 const archivedTodos = ref([])
+const archiveSubTab = ref('tasks') // 'tasks', 'notes'
 const undoInProgress = ref({})
 const expandedChanges = ref({})
 
 axios.defaults.withCredentials = true
 
 onMounted(() => {
-  if (activeTab.value === 'history') fetchChangelog()
-  if (activeTab.value === 'archive') fetchArchive()
+  if (props.show) {
+    fetchChangelog()
+    fetchArchive()
+  }
+})
+
+watch(() => props.show, (newVal) => {
+  if (newVal) {
+    fetchChangelog()
+    fetchArchive()
+  }
 })
 
 const switchTab = (tab) => {
@@ -191,6 +202,55 @@ const reviveFromArchive = async (id) => {
   }
 }
 
+const reviveNote = async (key) => {
+  try {
+    const notesArch = { ...props.archivedNotes }
+    const noteContent = notesArch[key]
+    delete notesArch[key]
+    await axios.post(`${API_URL}/notes/archive`, notesArch)
+    
+    const notesRes = await axios.get(`${API_URL}/notes`)
+    const currentNotes = notesRes.data || {}
+    currentNotes[key] = noteContent
+    await axios.post(`${API_URL}/notes`, currentNotes)
+    
+    message.value = 'Notiz erfolgreich wiederhergestellt!'
+    messageType.value = 'success'
+    emit('notes-revived')
+  } catch (err) {
+    message.value = 'Fehler beim Wiederherstellen der Notiz.'
+    messageType.value = 'error'
+  }
+}
+
+const deleteNoteFromArchive = async (key) => {
+  if (!confirm('Möchten Sie diese Notiz wirklich endgültig löschen?')) return
+  try {
+    const notesArch = { ...props.archivedNotes }
+    delete notesArch[key]
+    await axios.post(`${API_URL}/notes/archive`, notesArch)
+    message.value = 'Notiz endgültig gelöscht.'
+    messageType.value = 'success'
+    emit('notes-revived')
+  } catch (err) {
+    message.value = 'Fehler beim Löschen der Notiz.'
+    messageType.value = 'error'
+  }
+}
+
+const clearAllNotesArchive = async () => {
+  if (!confirm('Möchten Sie wirklich alle archivierten Notizen endgültig löschen?')) return
+  try {
+    await axios.post(`${API_URL}/notes/archive`, {})
+    message.value = 'Alle archivierten Notizen wurden gelöscht.'
+    messageType.value = 'success'
+    emit('notes-revived')
+  } catch (err) {
+    message.value = 'Fehler beim Löschen des Notiz-Archivs.'
+    messageType.value = 'error'
+  }
+}
+
 const undoChange = async (change) => {
   if (undoInProgress.value[change.id]) return
   undoInProgress.value[change.id] = true
@@ -271,6 +331,19 @@ const clearAllHistory = async () => {
     messageType.value = 'error'
   }
 }
+
+const clearAllArchive = async () => {
+  if (!confirm('Möchten Sie wirklich das gesamte Archiv endgültig löschen? Dies kann nicht rückgängig gemacht werden.')) return
+  try {
+    await axios.post(`${API_URL}/archive`, { archivedTodos: [] })
+    message.value = 'Das gesamte Archiv wurde gelöscht.'
+    messageType.value = 'success'
+    await fetchArchive()
+  } catch (err) {
+    message.value = 'Fehler beim Löschen des Archivs.'
+    messageType.value = 'error'
+  }
+}
 </script>
 
 <template>
@@ -319,24 +392,64 @@ const clearAllHistory = async () => {
         </div>
 
         <div v-show="activeTab === 'archive'" class="tab-content archive-tab">
-          <div v-if="archivedTodos.length === 0" class="empty-state">Keine archivierten Aufgaben.</div>
-          <div v-else class="archive-list">
-            <div v-for="todo in archivedTodos" :key="todo.id" class="archive-item card slim">
-              <div class="archive-info">
-                <strong>{{ todo.name }}</strong>
-                <div class="archive-meta">Archiviert am: {{ new Date(todo.id).toLocaleDateString() }}</div>
-              </div>
-              <div class="action-buttons">
-                <button class="pure-button mini-btn" @click="reviveFromArchive(todo.id)" title="Wiederherstellen">
-                  <RotateCcw :size="14" />
-                </button>
-                <button class="pure-button mini-btn danger-btn" @click="deleteFromArchive(todo.id)" title="Endgültig löschen">
-                  <Trash2 :size="14" />
-                </button>
+          <div class="archive-sub-nav">
+             <button class="mini-tab" :class="{ active: archiveSubTab === 'tasks' }" @click="archiveSubTab = 'tasks'">Aufgaben</button>
+             <button class="mini-tab" :class="{ active: archiveSubTab === 'notes' }" @click="archiveSubTab = 'notes'">Notizen</button>
+          </div>
+
+          <!-- Tasks Archive -->
+          <div v-if="archiveSubTab === 'tasks'">
+            <div class="archive-header-actions" v-if="archivedTodos.length > 0" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <span style="font-size: 0.85rem; color: var(--text-muted);">Archivierte Aufgaben: <strong>{{ archivedTodos.length }}</strong></span>
+              <button class="pure-button mini-btn danger-btn" @click="clearAllArchive" title="Ganzes Aufgaben-Archiv löschen">
+                <Trash2 :size="14" style="margin-right: 0.3rem" /> Alle löschen
+              </button>
+            </div>
+            <div v-if="archivedTodos.length === 0" class="empty-state">Keine archivierten Aufgaben.</div>
+            <div v-else class="archive-list">
+              <div v-for="todo in archivedTodos" :key="todo.id" class="archive-item card slim">
+                <div class="archive-info">
+                  <strong>{{ todo.name }}</strong>
+                  <div class="archive-meta">Archiviert am: {{ new Date(todo.id).toLocaleDateString() }}</div>
+                </div>
+                <div class="action-buttons">
+                  <button class="pure-button mini-btn" @click="reviveFromArchive(todo.id)" title="Wiederherstellen">
+                    <RotateCcw :size="14" />
+                  </button>
+                  <button class="pure-button mini-btn danger-btn" @click="deleteFromArchive(todo.id)" title="Endgültig löschen">
+                    <Trash2 :size="14" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
+          <!-- Notes Archive -->
+          <div v-if="archiveSubTab === 'notes'">
+            <div class="archive-header-actions" v-if="Object.keys(archivedNotes || {}).length > 0" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <span style="font-size: 0.85rem; color: var(--text-muted);">Archivierte Notizen: <strong>{{ Object.keys(archivedNotes).length }}</strong></span>
+              <button class="pure-button mini-btn danger-btn" @click="clearAllNotesArchive" title="Ganzes Notiz-Archiv löschen">
+                <Trash2 :size="14" style="margin-right: 0.3rem" /> Alle löschen
+              </button>
+            </div>
+            <div v-if="!archivedNotes || Object.keys(archivedNotes).length === 0" class="empty-state">Keine archivierten Notizen.</div>
+            <div v-else class="archive-list">
+              <div v-for="(content, key) in archivedNotes" :key="key" class="archive-item card slim">
+                <div class="archive-info">
+                  <strong>Notiz vom {{ isNaN(new Date(key).getTime()) ? key : new Date(key).toLocaleDateString('de-DE') }}</strong>
+                  <div class="archive-meta" v-html="typeof content === 'string' ? content.substring(0, 100) + '...' : 'Kein Inhalt'"></div>
+                </div>
+                <div class="action-buttons">
+                  <button class="pure-button mini-btn" @click="reviveNote(key)" title="Wiederherstellen">
+                    <RotateCcw :size="14" />
+                  </button>
+                  <button class="pure-button mini-btn danger-btn" @click="deleteNoteFromArchive(key)" title="Endgültig löschen">
+                    <Trash2 :size="14" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div v-show="activeTab === 'history'" class="tab-content history-tab">
@@ -408,6 +521,10 @@ const clearAllHistory = async () => {
   gap: 0.5rem; font-size: 0.875rem; color: #6b7280; transition: all 0.2s;
 }
 .tab-btn.active { background: white; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-weight: 600; }
+.archive-sub-nav { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid #f3f4f6; padding-bottom: 0.5rem; }
+.mini-tab { padding: 0.4rem 0.8rem; border: none; background: transparent; font-size: 0.8rem; color: #6b7280; cursor: pointer; border-radius: 0.25rem; transition: all 0.2s; }
+.mini-tab:hover { background: #f3f4f6; }
+.mini-tab.active { background: #2563eb; color: white; font-weight: 600; }
 .modal-content { padding: 1.5rem; overflow-y: auto; flex: 1; }
 .backup-section { margin-bottom: 2rem; }
 .section-title { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: #374151; margin-bottom: 0.5rem; }

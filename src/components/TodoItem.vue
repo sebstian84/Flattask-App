@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
-import { GripVertical, Trash2, Calendar, Tag, ChevronDown, ChevronUp, Edit2, Check, X, ArchiveRestore, Circle, CheckCircle2 } from 'lucide-vue-next'
+import { GripVertical, Trash2, Calendar, Tag, ChevronDown, ChevronUp, Edit2, Check, X, ArchiveRestore, Circle, CheckCircle2, Pin, PinOff } from 'lucide-vue-next'
 import Editor from './Editor.vue'
 
 const props = defineProps({
@@ -118,6 +118,11 @@ const cancelDescription = () => {
   isEditingDescription.value = false
 }
 
+const togglePin = () => {
+  const newPinned = !props.todo.pinned
+  emit('update', { ...props.todo, pinned: newPinned })
+}
+
 const delayedSaveTags = () => {
   setTimeout(() => {
     if (isEditingTags.value) saveTags()
@@ -185,9 +190,12 @@ const openPicker = () => {
 
 <template>
   <div ref="itemRef" class="card todo-item" style="padding: 0; margin-bottom: 0.25rem;" :class="{ 'is-archive-item': isArchive }">
-    <div class="main-row" @click="!isArchive && (isExpanded = !isExpanded)">
-      <div v-if="canDrag && !isArchive" class="drag-handle">
-        <GripVertical :size="14" />
+    <div class="main-row" @click="!isArchive && (isExpanded = !isExpanded)" :class="{ 'is-pinned': todo.pinned }">
+      <div class="drag-handle" v-if="canDrag && !todo.pinned && !isArchive">
+        <GripVertical :size="16" />
+      </div>
+      <div class="pinned-indicator" v-if="todo.pinned">
+        <Pin :size="12" fill="currentColor" />
       </div>
 
       <div class="content">
@@ -238,7 +246,10 @@ const openPicker = () => {
               <CheckCircle2 v-if="todo.status === 'erledigt'" :size="14" class="text-success" />
               <Circle v-else :size="14" />
             </button>
-            <button class="pure-button btn-icon small btn-danger" @click.stop="requestDelete" title="Löschen"><Trash2 :size="12" /></button>
+            <button class="btn-icon small" @click.stop="togglePin" :title="todo.pinned ? 'Anheften aufheben' : 'Anheften'" :class="{ 'is-active': todo.pinned }">
+              <Pin :size="14" :fill="todo.pinned ? 'currentColor' : 'none'" />
+            </button>
+            <button class="pure-button btn-icon small btn-danger" @click.stop="requestDelete" title="Löschen"><Trash2 :size="14" /></button>
             <button class="pure-button btn-icon small" @click.stop="isExpanded = !isExpanded">
               <ChevronDown v-if="!isExpanded" :size="14" />
               <ChevronUp v-else :size="14" />
@@ -264,12 +275,15 @@ const openPicker = () => {
 </template>
 
 <style scoped>
-.todo-item { transition: all 0.1s; cursor: pointer; }
-.main-row { display: flex; align-items: center; padding: 0.25rem 0.75rem; gap: 0.75rem; min-height: 2rem; }
+.todo-item { border-radius: 0.5rem; transition: all 0.2s; background: var(--bg-card); }
+.main-row { display: flex; align-items: center; padding: 0.2rem 0.75rem; min-height: var(--todo-row-height); gap: 0.75rem; border-radius: 0.5rem; }
+.main-row.is-pinned { background: rgba(59, 130, 246, 0.03); border-left: 3px solid var(--primary); border-radius: 0 0.5rem 0.5rem 0; }
+.dark-mode .main-row.is-pinned { background: rgba(59, 130, 246, 0.08); }
 .drag-handle { cursor: grab; color: #d1d5db; display: flex; }
+.pinned-indicator { color: var(--primary); display: flex; }
 .content { flex: 1; min-width: 0; }
 .name-row { display: flex; align-items: center; gap: 0.75rem; }
-.name { font-weight: 500; color: var(--text-heading); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; display: block; }
+.name { font-weight: 500; color: var(--text-heading); font-size: var(--todo-font-size); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; display: block; }
 .name.is-completed { text-decoration: line-through; color: var(--text-muted); }
 .name :deep(.highlight) { background: #fde047; color: #000; border-radius: 2px; padding: 0 1px; }
 .dark-mode .name :deep(.highlight) { background: #ca8a04; color: #fff; }
@@ -284,7 +298,9 @@ const openPicker = () => {
 
 .actions { display: flex; gap: 0.1rem; }
 .btn-icon.small { padding: 0.2rem; border-radius: 2rem !important; min-width: 1.5rem; height: 1.5rem; display: flex; justify-content: center; align-items: center; background: transparent; color: #9ca3af; }
-.btn-icon.small:hover { background: #f3f4f6; color: #4b5563; }
+.btn-icon:hover { background: #f3f4f6; color: var(--primary); }
+.btn-icon.is-active { color: var(--primary); background: rgba(59, 130, 246, 0.1); }
+.dark-mode .btn-icon:hover { background: #374151; }
 .btn-danger:hover { color: var(--danger); background: #fee2e2; }
 .btn-success:hover { color: var(--success); background: #d1fae5; }
 
