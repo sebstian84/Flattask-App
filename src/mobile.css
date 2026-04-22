@@ -7,7 +7,6 @@
 
   html, body {
     width: 100% !important;
-    overflow-x: hidden !important;
   }
 
   #app {
@@ -39,10 +38,13 @@
 
   /* Top bar */
   .top-bar {
-    position: static !important;
-    z-index: 5 !important;
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1000 !important;
     padding: 0.3rem !important;
     margin-bottom: 0.3rem !important;
+    background: white;
   }
 
   .logo {

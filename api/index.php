@@ -58,6 +58,27 @@ function get_auth_token() {
     if (isset($_COOKIE['todo_auth_token'])) {
         return $_COOKIE['todo_auth_token'];
     }
+    // Also check Authorization header
+    $headers = [];
+    if (function_exists('apache_request_headers')) {
+        $headers = apache_request_headers();
+    }
+    if (isset($headers['Authorization'])) {
+        if (preg_match('/Bearer\s+(.*)$/i', $headers['Authorization'], $matches)) {
+            return $matches[1];
+        }
+    }
+    // Alternative way to get headers if not using Apache or if header is missing in $headers
+    if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        if (preg_match('/Bearer\s+(.*)$/i', $_SERVER['HTTP_AUTHORIZATION'], $matches)) {
+            return $matches[1];
+        }
+    }
+    if (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        if (preg_match('/Bearer\s+(.*)$/i', $_SERVER['REDIRECT_HTTP_AUTHORIZATION'], $matches)) {
+            return $matches[1];
+        }
+    }
     return null;
 }
 

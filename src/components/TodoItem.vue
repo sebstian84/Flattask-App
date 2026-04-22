@@ -71,7 +71,9 @@ const updateDate = (newDate) => {
 const cancel = () => {
   localTodo.value = { ...props.todo }
   tagInput.value = props.todo.tags ? props.todo.tags.join(', ') : ''
-  isEditing.value = false
+  isEditingTitle.value = false
+  isEditingTags.value = false
+  isEditingDescription.value = false
 }
 
 const addTagToInput = (tag) => {
@@ -83,8 +85,10 @@ const addTagToInput = (tag) => {
 }
 
 const formatDate = (dateStr) => {
-  if (!dateStr) return 'Datum'
-  const [year, month, day] = dateStr.split('-')
+  if (!dateStr || typeof dateStr !== 'string') return 'Datum'
+  const parts = dateStr.split('-')
+  if (parts.length !== 3) return 'Datum'
+  const [year, month, day] = parts
   return `${day}.${month}.${year}`
 }
 
@@ -99,6 +103,17 @@ const confirmDelete = () => {
 
 const cancelDelete = () => {
   isConfirmingDelete.value = false
+}
+
+const dateInputRef = ref(null)
+const openPicker = () => {
+  if (dateInputRef.value) {
+    if (typeof dateInputRef.value.showPicker === 'function') {
+      dateInputRef.value.showPicker()
+    } else {
+      dateInputRef.value.click()
+    }
+  }
 }
 
 </script>
@@ -125,11 +140,11 @@ const cancelDelete = () => {
               </div>
               <input v-else v-model="tagInput" class="mini-input inline-tag-input" @keyup.enter="saveTags" @keyup.esc="cancelTags" @blur="saveTags" placeholder="Tag1, Tag2" autofocus @click.stop />
               
-              <div class="inline-date-picker" title="Datum bearbeiten">
-                <label class="badge date-badge editable-text" :class="{ 'no-date': !todo.targetDate }">
+              <div class="inline-date-picker" title="Datum bearbeiten" @click.stop="openPicker">
+                <label class="badge date-badge editable-text" :class="{ 'no-date': !todo.targetDate }" style="pointer-events: none;">
                   <Calendar :size="8" /> {{ formatDate(todo.targetDate) }}
                 </label>
-                <input v-if="!isArchive" :id="'date-' + todo.id" type="date" class="hidden-date-input" :value="todo.targetDate" @change="(e) => { updateDate(e.target.value); e.target.blur(); }" @click.stop />
+                <input v-if="!isArchive" ref="dateInputRef" :id="'date-' + todo.id" type="date" class="hidden-date-input" :value="todo.targetDate" @change="(e) => { updateDate(e.target.value); e.target.blur(); }" />
               </div>
             </div>
           </div>
@@ -189,8 +204,8 @@ const cancelDelete = () => {
 .date-badge { background: #fff7ed; color: #9a3412; border: 1px solid #ffedd5; }
 .date-badge.no-date { background: #f9fafb; color: #9ca3af; border: 1px dashed #e5e7eb; }
 
-.inline-date-picker { position: relative; display: flex; align-items: center; cursor: pointer; }
-.hidden-date-input { position: absolute; opacity: 0; top: 0; left: 0; width: 100%; height: 100%; cursor: pointer; }
+.inline-date-picker { position: relative; display: inline-flex; align-items: center; cursor: pointer; min-width: 80px; min-height: 1.5rem; }
+.hidden-date-input { position: absolute; opacity: 0; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; border: none; padding: 0; margin: 0; display: block; }
 
 .actions { display: flex; gap: 0.1rem; }
 .btn-icon.small { padding: 0.2rem; border-radius: 2rem !important; min-width: 1.5rem; height: 1.5rem; display: flex; justify-content: center; align-items: center; background: transparent; color: #9ca3af; }

@@ -228,6 +228,7 @@ const getWeekRange = (date) => {
 const getGroupKey = (todo) => {
   if (!todo.targetDate) return 'Kein Datum'
   const date = new Date(todo.targetDate)
+  if (isNaN(date.getTime())) return 'Kein Datum'
   if (aggregation.value === 'daily') return todo.targetDate
   if (aggregation.value === 'weekly') return `KW ${getWeekNumber(date)} (${date.getFullYear()})`
   if (aggregation.value === 'monthly') return date.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
@@ -649,7 +650,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="showNewForm" class="card">
+    <div v-if="showNewForm" class="card new-todo-form">
       <form class="pure-form pure-form-stacked" @submit.prevent="addTodo">
         <fieldset>
           <legend>Neues Todo erstellen</legend>
@@ -835,7 +836,15 @@ onMounted(() => {
   .desktop-nav { display: none !important; }
   
   /* SHOW MOBILE NAV */
-  .mobile-nav { display: block; position: sticky; top: 0; z-index: 1000; padding: 0.5rem 0.75rem; overflow: visible; }
+  .mobile-nav { 
+    display: block !important; 
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1000 !important;
+    padding: 0.4rem 0.75rem; 
+    background: white;
+  }
   .mobile-top-bar-inner { display: flex; align-items: center; justify-content: space-between; width: 100%; position: relative; }
   
   .hamburger-btn { background: transparent; border: none; padding: 0.3rem; display: flex; align-items: center; justify-content: center; }
@@ -877,6 +886,16 @@ onMounted(() => {
   .drawer-actions { display: flex; flex-direction: column; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem; }
   .drawer-btn { justify-content: flex-start; padding: 0.75rem 1rem; font-size: 0.95rem; height: auto; gap: 0.75rem; background: #f9fafb; border: 1px solid var(--border-color); width: 100%; }
   
+  .new-todo-form {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 3rem !important;
+    z-index: 900 !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
   .empty-state {
     padding: 1.5rem 0.75rem;
   }
