@@ -4,20 +4,45 @@
   font-weight: 400;
 
   color-scheme: light;
-  color: #1f2937;
-  background-color: #f9fafb;
-
+  --bg-app: #f3f4f6;
+  --bg-card: #ffffff;
+  --bg-page: #f9fafb;
+  --text-main: #1f2937;
+  --text-heading: #111827;
+  --text-muted: #6b7280;
+  --border-color: #e5e7eb;
   --primary: #3b82f6;
   --primary-hover: #2563eb;
-  --border-color: #e5e7eb;
-  --text-muted: #6b7280;
   --danger: #ef4444;
   --success: #10b981;
+  --tag-bg: #f3f4f6;
+  --tag-color: #4b5563;
+  --header-bg: #f3f4f6;
+  --input-bg: #ffffff;
+}
+
+.dark-mode {
+  color-scheme: dark;
+  --bg-app: #030712;
+  --bg-card: #111827;
+  --bg-page: #111827;
+  --text-main: #e5e7eb;
+  --text-heading: #f9fafb;
+  --text-muted: #9ca3af;
+  --border-color: #374151;
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --tag-bg: #1f2937;
+  --tag-color: #d1d5db;
+  --header-bg: #1f2937;
+  --input-bg: #1f2937;
 }
 
 body {
   margin: 0;
-  background-color: #f3f4f6;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  transition: background-color 0.3s, color 0.3s;
 }
 
 #app {
@@ -35,8 +60,41 @@ header {
 h1 {
   font-size: 2rem;
   margin: 0;
-  color: #111827;
+  color: var(--text-heading);
   font-weight: 800;
+}
+
+.logo-area, .logo-group {
+  display: flex;
+  align-items: center;
+}
+
+.dark-mode-toggle {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 0.5rem !important;
+  margin-left: 0.75rem;
+  transition: all 0.2s;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.dark-mode-toggle:hover {
+  background: var(--border-color);
+  color: var(--text-heading);
+  transform: none;
+}
+
+.dark-mode-toggle.mini {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-left: 0.5rem;
 }
 
 button {
@@ -65,7 +123,7 @@ button.pure-button {
 }
 
 .card {
-  background: white;
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 0.75rem;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
@@ -88,6 +146,8 @@ button.pure-button {
   border-radius: 2rem !important;
   padding: 0.4rem 1rem !important;
   border: 1px solid var(--border-color) !important;
+  background-color: var(--input-bg) !important;
+  color: var(--text-main) !important;
 }
 .pure-form input:focus { border-color: var(--primary) !important; }
 
@@ -208,9 +268,9 @@ button.pure-button {
 
   .minimal-select {
     border: 1px solid var(--border-color);
-    background: white;
+    background: var(--bg-card);
     font-size: 0.65rem;
-    color: #1f2937;
+    color: var(--text-main);
     padding: 0.1rem 0.2rem;
     border-radius: 2rem;
     flex: 1;
@@ -266,7 +326,7 @@ button.pure-button {
     display: block;
     margin-bottom: 0.3rem;
     font-weight: 600;
-    color: #4b5563;
+    color: var(--text-muted);
   }
 
   /* Pure Grid Responsive */

@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import draggable from 'vuedraggable'
-import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2, ArrowDown, HelpCircle, Menu } from 'lucide-vue-next'
+import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2, ArrowDown, HelpCircle, Menu, Sun, Moon } from 'lucide-vue-next'
 import Editor from './components/Editor.vue'
 import TodoItem from './components/TodoItem.vue'
 import BackupModal from './components/BackupModal.vue'
@@ -278,6 +278,23 @@ const groupedTodos = computed(() => {
     if (!timeGroups[key]) timeGroups[key] = []
     timeGroups[key].push(todo)
   })
+
+  // Ensure current period is always shown if aggregation is active
+  if (aggregation.value !== 'none') {
+    const now = new Date()
+    let currentKey = ''
+    if (aggregation.value === 'daily') {
+      const y = now.getFullYear()
+      const m = String(now.getMonth() + 1).padStart(2, '0')
+      const d = String(now.getDate()).padStart(2, '0')
+      currentKey = `${y}-${m}-${d}`
+    } else if (aggregation.value === 'weekly') {
+      currentKey = `KW ${getWeekNumber(now)} (${now.getFullYear()})`
+    } else if (aggregation.value === 'monthly') {
+      currentKey = now.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+    }
+    if (currentKey && !timeGroups[currentKey]) timeGroups[currentKey] = []
+  }
   const finalGroups = []
   const sortedTimeKeys = Object.keys(timeGroups).sort((a, b) => {
     if (a === 'Kein Datum') return 1; if (b === 'Kein Datum') return -1; if (a === 'Alle') return -1; if (b === 'Alle') return 1
@@ -453,6 +470,20 @@ onMounted(() => {
     }
   })
 })
+
+const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
+const toggleDarkMode = () => {
+  isDarkMode.value = !isDarkMode.value
+  localStorage.setItem('darkMode', isDarkMode.value)
+}
+
+watch(isDarkMode, (val) => {
+  if (val) {
+    document.documentElement.classList.add('dark-mode')
+  } else {
+    document.documentElement.classList.remove('dark-mode')
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -463,6 +494,10 @@ onMounted(() => {
         <!-- Logo Area -->
         <div class="logo-area">
           <h1 class="logo">Aufgabenliste</h1>
+          <button class="dark-mode-toggle" @click="toggleDarkMode" :title="isDarkMode ? 'Heller Modus' : 'Dunkler Modus'">
+            <Sun v-if="isDarkMode" :size="14" />
+            <Moon v-else :size="14" />
+          </button>
         </div>
 
         <!-- Scrollable Filters -->
@@ -557,7 +592,13 @@ onMounted(() => {
           <Menu :size="18" />
         </button>
         
-        <h1 class="logo mobile-logo">Aufgabenliste</h1>
+        <div class="logo-group">
+          <h1 class="logo mobile-logo">Aufgabenliste</h1>
+          <button class="dark-mode-toggle mini" @click="toggleDarkMode">
+            <Sun v-if="isDarkMode" :size="12" />
+            <Moon v-else :size="12" />
+          </button>
+        </div>
         
         <div class="mobile-quick-actions">
           <button class="pure-button pure-button-primary mini-btn" @click="showNewForm = !showNewForm" title="Neu">
@@ -657,7 +698,7 @@ onMounted(() => {
           <div class="pure-g">
             <div class="pure-u-1 pure-u-md-1-2" style="padding-right: 1rem">
               <label>Name</label>
-              <input v-model="newTodo.name" class="pure-u-1" type="text" maxlength="150" required />
+              <input v-model="newTodo.name" class="pure-u-1" type="text" maxlength="500" required />
             </div>
             <div class="pure-u-1 pure-u-md-1-4" style="padding-right: 1rem">
               <label>Zieldatum</label>
@@ -807,11 +848,11 @@ onMounted(() => {
 .todo-list { display: flex; flex-direction: column; gap: 0.3rem; }
 .empty-state { text-align: center; padding: 2rem; color: #9ca3af; font-style: italic; font-size: 0.9rem; }
 .todo-group { margin-bottom: 0.75rem; }
-.group-header { padding: 0.5rem 1rem; background: #f3f4f6; font-weight: 600; font-size: 0.95rem; color: #374151; display: flex; align-items: center; gap: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem; }
-.group-header.current-period { background: #eff6ff; border-left: 4px solid #3b82f6; color: #1e3a8a; }
-.current-badge { background: #3b82f6; color: white; margin-left: 0.5rem; font-size: 0.7rem; padding: 0.1rem 0.5rem; border-radius: 2rem; }
-.sub-header { padding: 0.3rem 1rem; font-size: 0.85rem; font-weight: 500; color: #4b5563; background: #f9fafb; margin: 0.25rem 0; display: flex; align-items: center; gap: 0.3rem; }
-.tag-group { margin-left: 0.4rem; border-left: 2px solid #f3f4f6; }
+.group-header { padding: 0.5rem 1rem; background: var(--tag-bg); font-weight: 600; font-size: 0.95rem; color: var(--text-heading); display: flex; align-items: center; gap: 0.5rem; border-radius: 0.5rem; margin-bottom: 0.5rem; }
+.group-header.current-period { background: var(--header-bg); border-left: 4px solid var(--primary); color: var(--primary); }
+.current-badge { background: var(--primary); color: white; margin-left: 0.5rem; font-size: 0.7rem; padding: 0.1rem 0.5rem; border-radius: 2rem; }
+.sub-header { font-size: 0.6rem; color: var(--text-muted); font-weight: 600; padding: 0.2rem 0.75rem; background: transparent; display: flex; align-items: center; gap: 0.25rem; border-bottom: none; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.5rem; margin-bottom: 0.1rem; }
+.tag-group { margin-left: 0.2rem; border-left: 1px solid var(--border-color); }
 .group-items { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.1rem 0.3rem; }
 
 /* Mobile specific classes hidden on desktop */

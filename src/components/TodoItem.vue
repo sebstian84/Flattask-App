@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { GripVertical, Trash2, Calendar, Tag, ChevronDown, ChevronUp, Edit2, Check, X, ArchiveRestore, Circle, CheckCircle2 } from 'lucide-vue-next'
 import Editor from './Editor.vue'
 
@@ -22,6 +22,47 @@ const isExpanded = ref(false)
 const isConfirmingDelete = ref(false)
 const localTodo = ref({ ...props.todo })
 const tagInput = ref(props.todo.tags ? props.todo.tags.join(', ') : '')
+const nameRef = ref(null)
+const isOverflowing = ref(false)
+const showTooltip = ref(false)
+
+const checkOverflow = () => {
+  if (nameRef.value) {
+    isOverflowing.value = nameRef.value.scrollWidth > nameRef.value.clientWidth
+    if (isOverflowing.value) showTooltip.value = true
+  }
+}
+
+const hideTooltip = () => {
+  showTooltip.value = false
+}
+
+const titleFontSize = computed(() => {
+  const currentName = isEditingTitle.value ? localTodo.value.name : props.todo.name
+  const len = currentName ? currentName.length : 0
+  if (len <= 20) return '0.9rem'
+  if (len <= 40) return '0.8rem'
+  if (len <= 60) return '0.75rem'
+  return '0.7rem'
+})
+
+const itemRef = ref(null)
+
+const handleClickOutside = (event) => {
+  if (itemRef.value && !itemRef.value.contains(event.target)) {
+    if (isEditingTitle.value) saveTitle()
+    if (isEditingTags.value) saveTags()
+    if (isEditingDescription.value) saveDescription()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('mousedown', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('mousedown', handleClickOutside)
+})
 
 watch(() => props.todo, (newVal) => {
   localTodo.value = { ...newVal }
@@ -57,6 +98,12 @@ const saveDescription = () => {
 const cancelDescription = () => {
   localTodo.value.description = props.todo.description
   isEditingDescription.value = false
+}
+
+const delayedSaveTags = () => {
+  setTimeout(() => {
+    if (isEditingTags.value) saveTags()
+  }, 200)
 }
 
 const toggleStatus = () => {
@@ -119,7 +166,7 @@ const openPicker = () => {
 </script>
 
 <template>
-  <div class="card todo-item" style="padding: 0; overflow: hidden; margin-bottom: 0.25rem;" :class="{ 'is-archive-item': isArchive }">
+  <div ref="itemRef" class="card todo-item" style="padding: 0; margin-bottom: 0.25rem;" :class="{ 'is-archive-item': isArchive }">
     <div class="main-row" @click="!isArchive && (isExpanded = !isExpanded)">
       <div v-if="canDrag && !isArchive" class="drag-handle">
         <GripVertical :size="14" />
@@ -128,8 +175,11 @@ const openPicker = () => {
       <div class="content">
         <div class="view-mode">
           <div class="name-row">
-            <span v-if="!isEditingTitle" class="name editable-text" :class="{ 'is-completed': todo.status === 'erledigt' }" @click.stop="isEditingTitle = true" title="Titel bearbeiten">{{ todo.name }}</span>
-            <input v-else v-model="localTodo.name" class="pure-u-1 mini-input inline-title-input" @keyup.enter="saveTitle" @keyup.esc="cancelTitle" @blur="saveTitle" maxlength="150" autofocus @click.stop />
+            <div v-if="!isEditingTitle" class="name-container" @mouseenter="checkOverflow" @mouseleave="hideTooltip">
+              <span ref="nameRef" class="name editable-text" :class="{ 'is-completed': todo.status === 'erledigt' }" @click.stop="isEditingTitle = true" :style="{ fontSize: titleFontSize }">{{ todo.name }}</span>
+              <div v-if="showTooltip" class="custom-tooltip">{{ todo.name }}</div>
+            </div>
+            <input v-else v-model="localTodo.name" class="pure-u-1 mini-input inline-title-input" @keyup.enter="saveTitle" @keyup.esc="cancelTitle" @blur="saveTitle" maxlength="500" autofocus @click.stop :style="{ fontSize: titleFontSize }" />
             
             <div class="meta-inline">
               <div v-if="!isEditingTags" class="tags-list editable-text" @click.stop="isEditingTags = true" title="Tags bearbeiten">
@@ -138,7 +188,12 @@ const openPicker = () => {
                   <Tag :size="8" /> {{ tag }}
                 </span>
               </div>
-              <input v-else v-model="tagInput" class="mini-input inline-tag-input" @keyup.enter="saveTags" @keyup.esc="cancelTags" @blur="saveTags" placeholder="Tag1, Tag2" autofocus @click.stop />
+              <div v-else class="inline-tag-edit-container" @click.stop>
+                <div v-if="allTags && allTags.length > 0" class="suggested-tags inline-suggestions">
+                  <span v-for="tag in allTags" :key="tag" class="tag-chip mini" @click="addTagToInput(tag)">+ {{ tag }}</span>
+                </div>
+                <input v-model="tagInput" class="mini-input inline-tag-input" @keyup.enter="saveTags" @keyup.esc="cancelTags" @blur="delayedSaveTags" placeholder="Tag1, Tag2" autofocus />
+              </div>
               
               <div class="inline-date-picker" title="Datum bearbeiten" @click.stop="openPicker">
                 <label class="badge date-badge editable-text" :class="{ 'no-date': !todo.targetDate }" style="pointer-events: none;">
@@ -179,7 +234,7 @@ const openPicker = () => {
       <div class="description-section">
         <div v-if="!isEditingDescription" class="description-view editable-desc" @click="isEditingDescription = true" title="Klicken zum Bearbeiten" v-html="todo.description || '<i>Keine Beschreibung. Klicken zum Hinzufügen.</i>'"></div>
         <div v-else class="inline-editor-container">
-          <Editor v-model="localTodo.description" />
+          <Editor v-model="localTodo.description" @blur="saveDescription" />
           <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
             <button class="pure-button btn-success mini-btn" @click.stop="saveDescription"><Check :size="12"/> Speichern</button>
             <button class="pure-button mini-btn secondary" @click.stop="cancelDescription"><X :size="12"/> Abbrechen</button>
@@ -196,13 +251,13 @@ const openPicker = () => {
 .drag-handle { cursor: grab; color: #d1d5db; display: flex; }
 .content { flex: 1; min-width: 0; }
 .name-row { display: flex; align-items: center; gap: 0.75rem; }
-.name { font-weight: 500; color: #111827; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; display: block; }
-.name.is-completed { text-decoration: line-through; color: #9ca3af; }
-.meta-inline { display: flex; gap: 0.4rem; align-items: center; }
+.name { font-weight: 500; color: var(--text-heading); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; display: block; }
+.name.is-completed { text-decoration: line-through; color: var(--text-muted); }
+.meta-inline { display: flex; gap: 0.4rem; align-items: center; margin-left: auto; }
 .tags-list { display: flex; gap: 0.25rem; }
-.badge { display: inline-flex; align-items: center; gap: 0.2rem; background: #f3f4f6; color: #4b5563; padding: 0.05rem 0.4rem; border-radius: 2rem; font-size: 0.65rem; cursor: pointer; border: 1px solid transparent; }
-.date-badge { background: #fff7ed; color: #9a3412; border: 1px solid #ffedd5; }
-.date-badge.no-date { background: #f9fafb; color: #9ca3af; border: 1px dashed #e5e7eb; }
+.badge { display: inline-flex; align-items: center; gap: 0.2rem; background: var(--tag-bg); color: var(--tag-color); padding: 0.05rem 0.4rem; border-radius: 2rem; font-size: 0.65rem; cursor: pointer; border: 1px solid transparent; }
+.date-badge { background: var(--tag-bg); color: var(--primary); border: 1px solid var(--border-color); }
+.date-badge.no-date { background: transparent; color: var(--text-muted); border: 1px dashed var(--border-color); }
 
 .inline-date-picker { position: relative; display: inline-flex; align-items: center; cursor: pointer; min-width: 80px; min-height: 1.5rem; }
 .hidden-date-input { position: absolute; opacity: 0; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; border: none; padding: 0; margin: 0; display: block; }
@@ -226,6 +281,27 @@ const openPicker = () => {
 .mini-input { padding: 0.2rem 0.6rem !important; font-size: 0.85rem !important; }
 .suggested-tags { display: flex; flex-wrap: wrap; gap: 0.2rem; margin-top: 0.25rem; }
 .tag-chip.mini { font-size: 0.6rem; padding: 0.05rem 0.4rem; background: #f3f4f6; border-radius: 2rem; cursor: pointer; color: #6b7280; }
+.name-container { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
+.custom-tooltip { position: absolute; bottom: calc(100% + 5px); left: 0; background: #1f2937; color: white; padding: 0.4rem 0.8rem; border-radius: 0.4rem; font-size: 0.8rem; z-index: 2000; white-space: normal; min-width: 200px; max-width: 400px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); pointer-events: none; line-height: 1.4; border: 1px solid rgba(255,255,255,0.1); }
+.custom-tooltip::after { content: ''; position: absolute; top: 100%; left: 15px; border-width: 5px; border-style: solid; border-color: #1f2937 transparent transparent transparent; }
+.inline-tag-edit-container { position: relative; display: inline-flex; align-items: center; }
+.inline-suggestions { 
+  position: absolute; 
+  bottom: 100%; 
+  left: 0; 
+  background: white; 
+  border: 1px solid var(--border-color); 
+  border-radius: 0.5rem; 
+  padding: 0.5rem; 
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+  z-index: 1000; 
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 0.3rem;
+  min-width: 180px;
+  max-width: 250px;
+  margin-bottom: 0.5rem;
+}
 
 /* Responsive Design for Tablets and Smartphones */
 @media (max-width: 768px) {
