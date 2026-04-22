@@ -225,7 +225,15 @@ const openPicker = () => {
                 <label class="badge date-badge editable-text" :class="{ 'no-date': !todo.targetDate }" style="pointer-events: none;">
                   <Calendar :size="8" /> {{ formatDate(todo.targetDate) }}
                 </label>
-                <input v-if="!isArchive" ref="dateInputRef" :id="'date-' + todo.id" type="date" class="hidden-date-input" :value="todo.targetDate" @change="(e) => { updateDate(e.target.value); e.target.blur(); }" />
+                <input 
+                  v-if="!isArchive" 
+                  ref="dateInputRef" 
+                  :id="'date-' + todo.id" 
+                  type="date" 
+                  class="hidden-date-input" 
+                  :value="todo.targetDate" 
+                  @input="(e) => { updateDate(e.target.value); e.target.blur(); }" 
+                />
               </div>
             </div>
           </div>
@@ -294,7 +302,7 @@ const openPicker = () => {
 .date-badge.no-date { background: transparent; color: var(--text-muted); border: 1px dashed var(--border-color); }
 
 .inline-date-picker { position: relative; display: inline-flex; align-items: center; cursor: pointer; min-width: 80px; min-height: 1.5rem; }
-.hidden-date-input { position: absolute; opacity: 0; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; border: none; padding: 0; margin: 0; display: block; }
+.hidden-date-input { position: absolute; opacity: 0; top: 0; left: 0; width: 100%; height: 100%; border: none; padding: 0; margin: 0; display: block; }
 
 .actions { display: flex; gap: 0.1rem; }
 .btn-icon.small { padding: 0.2rem; border-radius: 2rem !important; min-width: 1.5rem; height: 1.5rem; display: flex; justify-content: center; align-items: center; background: transparent; color: #9ca3af; }

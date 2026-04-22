@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import draggable from 'vuedraggable'
-import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2, ArrowDown, HelpCircle, Menu, Sun, Moon, BarChart3, AlertCircle, CheckCircle, Settings, StickyNote } from 'lucide-vue-next'
+import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2, ArrowDown, HelpCircle, Menu, Sun, Moon, BarChart3, AlertCircle, CheckCircle, Settings, StickyNote, AlarmClock, Download, ChevronUp, ChevronDown } from 'lucide-vue-next'
 import Editor from './components/Editor.vue'
 import TodoItem from './components/TodoItem.vue'
 import BackupModal from './components/BackupModal.vue'
@@ -17,13 +17,27 @@ const loginError = ref('')
 const notes = ref({})
 const archivedNotes = ref({})
 const todayKey = computed(() => new Date().toISOString().split('T')[0])
-const isSavingNotes = ref(false)
-const expandedPastNoteKeys = ref([]) // IDs of expanded past notes
+const workLogs = ref({}) // Date -> { accumulatedMs, isRunning, startTimeStamp, pause, start, end }
+const isSavingTime = ref(false)
+const elapsedTime = ref(0) // CURRENT session ms
+let timerInterval = null
+
+const appLog = (action, data = {}) => {
+  const timestamp = new Date().toLocaleTimeString('de-DE')
+  console.log(`[Timer ${timestamp}] ${action}`, JSON.parse(JSON.stringify(data)))
+}
+
+const timeFilter = ref({
+  from: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+  to: new Date().toISOString().split('T')[0]
+})
 
 const userSettings = ref({
   rowHeight: 2.5, // rem
   fontSize: 0.9,  // rem
-  compactMode: false
+  compactMode: false,
+  defaultPause: 30, // minutes
+  weeklyGoal: 40    // hours
 })
 
 // Axios config
@@ -511,6 +525,7 @@ onMounted(() => {
     fetchData()
     fetchNotes()
     fetchArchivedNotes()
+    fetchWorkLogs()
   }
   
   // Close user menu on click away
@@ -618,6 +633,251 @@ const highlightNotesSearch = (text) => {
   return text.replace(reg, '<span class="highlight">$1</span>')
 }
 
+const fetchWorkLogs = async () => {
+  try {
+    const res = await axios.get(`${API_URL}/time`)
+    workLogs.value = res.data || {}
+    // Check if a timer is already running today and start the local ticker
+    const log = workLogs.value[todayKey.value]
+    if (log && log.isRunning && log.startTimeStamp) {
+      elapsedTime.value = Date.now() - log.startTimeStamp
+      startLocalTimer()
+    }
+  } catch (err) { console.error("Error fetching work logs", err) }
+}
+
+const saveWorkLogs = async () => {
+  isSavingTime.value = true
+  try {
+    await axios.post(`${API_URL}/time`, workLogs.value)
+  } catch (err) { console.error("Error saving work logs", err) }
+  finally { isSavingTime.value = false }
+}
+
+const getWorkLog = (date) => {
+  if (!workLogs.value[date]) {
+    workLogs.value[date] = { 
+      start: '', 
+      end: '', 
+      pause: userSettings.value.defaultPause || 0, 
+      accumulatedMs: 0,
+      isRunning: false, 
+      startTimeStamp: null, 
+      totalHours: 0 
+    }
+  }
+  return workLogs.value[date]
+}
+
+const startTimer = () => {
+  const log = getWorkLog(todayKey.value)
+  const now = new Date()
+  const timeStr = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+  
+  if (!log.start) log.start = timeStr
+  
+  log.isRunning = true
+  log.startTimeStamp = Date.now()
+  
+  appLog('START', { date: todayKey.value, log })
+  saveWorkLogs()
+  startLocalTimer()
+}
+
+const stopTimer = () => {
+  const log = getWorkLog(todayKey.value)
+  const now = Date.now()
+  
+  if (log.isRunning && log.startTimeStamp) {
+    const sessionMs = now - log.startTimeStamp
+    log.accumulatedMs = (log.accumulatedMs || 0) + sessionMs
+    appLog('STOP - Session ended', { sessionMs, newAccumulated: log.accumulatedMs })
+  }
+  
+  log.end = new Date(now).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+  log.isRunning = false
+  log.startTimeStamp = null
+  
+  calculateTotal(todayKey.value)
+  saveWorkLogs()
+  stopLocalTimer()
+}
+
+const calculateTotal = (date) => {
+  const log = getWorkLog(date)
+  
+  // Total work is accumulatedMs + (running session) - pause
+  let totalMs = log.accumulatedMs || 0
+  if (log.isRunning && log.startTimeStamp) {
+    totalMs += (Date.now() - log.startTimeStamp)
+  }
+  
+  const pauseMs = (log.pause || 0) * 60000
+  log.totalHours = Math.max(0, (totalMs - pauseMs) / 3600000)
+  
+  appLog('CALC_TOTAL', { date, totalHours: log.totalHours, accumulatedMs: log.accumulatedMs })
+}
+
+const updateTimeField = (date, field, value) => {
+  const log = getWorkLog(date)
+  log[field] = value
+  
+  // If user manually edits start/end, we try to approximate accumulatedMs
+  // but this is optional. For now, manual edits of start/end override the 'accumulated' logic?
+  // Let's make it so manual edits of start/end RE-CALCULATE accumulatedMs if not running
+  if (!log.isRunning && (field === 'start' || field === 'end')) {
+    if (log.start && log.end) {
+      const [h1, m1] = log.start.split(':').map(Number)
+      const [h2, m2] = log.end.split(':').map(Number)
+      let diffMinutes = (h2 * 60 + m2) - (h1 * 60 + m1)
+      if (diffMinutes < 0) diffMinutes += 24 * 60
+      log.accumulatedMs = diffMinutes * 60000
+      appLog('MANUAL_EDIT - Reset accumulatedMs', { diffMinutes })
+    }
+  }
+  
+  calculateTotal(date)
+  saveWorkLogs()
+}
+
+const startLocalTimer = () => {
+  stopLocalTimer()
+  timerInterval = setInterval(() => {
+    const log = workLogs.value[todayKey.value]
+    if (log && log.isRunning && log.startTimeStamp) {
+      // Current session time
+      elapsedTime.value = Date.now() - log.startTimeStamp
+    } else {
+      elapsedTime.value = 0
+    }
+  }, 1000)
+}
+
+const stopLocalTimer = () => {
+  if (timerInterval) clearInterval(timerInterval)
+}
+
+const getRunningTotalMs = (date) => {
+  const log = workLogs.value[date]
+  if (!log) return 0
+  let totalMs = log.accumulatedMs || 0
+  if (log.isRunning && log.startTimeStamp) {
+    totalMs += (Date.now() - log.startTimeStamp)
+  }
+  return totalMs
+}
+
+const getRunningTotal = (date) => {
+  const log = workLogs.value[date]
+  if (!log) return 0
+  const totalMs = getRunningTotalMs(date)
+  const pauseMs = (log.pause || 0) * 60000
+  return Math.max(0, (totalMs - pauseMs) / 3600000)
+}
+
+const getWeekSum = (dateStr) => {
+  const date = new Date(dateStr)
+  const day = date.getDay() || 7 // 1-7 (Mon-Sun)
+  const start = new Date(date)
+  start.setDate(date.getDate() - day + 1) // Monday
+  
+  let sum = 0
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start)
+    d.setDate(start.getDate() + i)
+    const key = d.toISOString().split('T')[0]
+    sum += getRunningTotal(key)
+  }
+  return sum
+}
+
+const exportTimeLogs = () => {
+  const sortedKeys = Object.keys(workLogs.value).sort((a, b) => b.localeCompare(a))
+  let csv = "Datum;Start;Ende;Pause (Min);Gesamt (h)\n"
+  sortedKeys.forEach(k => {
+    const log = workLogs.value[k]
+    const total = getRunningTotal(k).toFixed(2).replace('.', ',')
+    csv += `${k};${log.start || ''};${log.end || ''};${log.pause || 0};${total}\n`
+  })
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `arbeitszeiten-${new Date().toISOString().split('T')[0]}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const getPastDate = (daysAgo) => {
+  const d = new Date()
+  d.setDate(d.getDate() - daysAgo)
+  return d
+}
+
+const firstTimeEntryDate = computed(() => {
+  const keys = Object.keys(workLogs.value).filter(k => workLogs.value[k].start || workLogs.value[k].totalHours > 0)
+  if (keys.length === 0) return null
+  return keys.sort()[0]
+})
+
+const filteredHistoryKeys = computed(() => {
+  const start = timeFilter.value.from
+  const end = timeFilter.value.to
+  
+  // We want to show all days in range, even if no log exists
+  const keys = []
+  let curr = new Date(end)
+  const stop = new Date(start)
+  
+  while (curr >= stop) {
+    keys.push(curr.toISOString().split('T')[0])
+    curr.setDate(curr.getDate() - 1)
+  }
+  return keys
+})
+
+const liveTimerString = computed(() => {
+  const log = workLogs.value[todayKey.value]
+  if (!log || !log.isRunning || !log.startTimeStamp) return "00:00:00"
+  
+  // Explicitly reference elapsedTime to ensure reactivity
+  // total = accumulated + (now - started)
+  const totalMs = (log.accumulatedMs || 0) + Math.max(0, elapsedTime.value)
+  
+  const hh = Math.floor(totalMs / 3600000)
+  const mm = Math.floor((totalMs % 3600000) / 60000)
+  const ss = Math.floor((totalMs % 60000) / 1000)
+  
+  return [hh, mm, ss].map(v => v.toString().padStart(2, '0')).join(':')
+})
+
+const weeklyStats = computed(() => {
+  const stats = []
+  const now = new Date()
+  
+  for (let i = 0; i < 8; i++) {
+    const d = new Date()
+    d.setDate(now.getDate() - (i * 7))
+    const day = d.getDay() || 7
+    const monday = new Date(d)
+    monday.setDate(d.getDate() - day + 1)
+    
+    let sum = 0
+    for (let j = 0; j < 7; j++) {
+      const dayDate = new Date(monday)
+      dayDate.setDate(monday.getDate() + j)
+      sum += getRunningTotal(dayDate.toISOString().split('T')[0])
+    }
+    
+    stats.push({
+      week: getWeekNumber(monday),
+      year: monday.getFullYear(),
+      total: sum
+    })
+  }
+  return stats.reverse()
+})
+
 const pastNoteKeys = computed(() => {
   return Object.keys(notes.value)
     .filter(key => key < todayKey.value)
@@ -670,6 +930,10 @@ const pinnedTodos = computed(() => {
             </button>
             <button class="nav-icon-btn" :class="{ active: currentView === 'notes' }" @click="currentView = currentView === 'notes' ? 'main' : 'notes'" title="Notizen & Tagebuch">
               <StickyNote :size="16" />
+            </button>
+            <button class="nav-icon-btn" :class="{ active: currentView === 'time' }" @click="currentView = currentView === 'time' ? 'main' : 'time'" title="Arbeitszeiterfassung">
+              <AlarmClock :size="16" />
+              <span v-if="getWorkLog(todayKey).isRunning" class="mini-live-timer">{{ liveTimerString }}</span>
             </button>
           </div>
         </div>
@@ -784,12 +1048,16 @@ const pinnedTodos = computed(() => {
           </div>
           <h1 class="logo mobile-logo">Flattask</h1>
           <div class="mobile-nav-icons">
-             <button class="dark-mode-toggle mini" @click="toggleDarkMode">
-               <Sun v-if="isDarkMode" :size="16" />
-               <Moon v-else :size="16" />
+             <button class="dark-mode-toggle" @click="toggleDarkMode">
+               <Sun v-if="isDarkMode" :size="20" />
+               <Moon v-else :size="20" />
              </button>
-             <button class="dark-mode-toggle mini" @click="currentView = currentView === 'notes' ? 'main' : 'notes'">
-               <StickyNote :size="16" />
+             <button class="dark-mode-toggle" @click="currentView = currentView === 'notes' ? 'main' : 'notes'">
+               <StickyNote :size="20" />
+             </button>
+             <button class="dark-mode-toggle" @click="currentView = currentView === 'time' ? 'main' : 'time'">
+               <AlarmClock :size="20" />
+               <span v-if="getWorkLog(todayKey).isRunning" class="mini-live-timer mobile">{{ liveTimerString }}</span>
              </button>
           </div>
         </div>
@@ -1101,6 +1369,37 @@ const pinnedTodos = computed(() => {
                   <input type="checkbox" v-model="userSettings.compactMode" />
                   <span class="slider round"></span>
                </label>
+               <span class="checkbox-label">Kompakte Darstellung</span>
+            </div>
+          </div>
+        </div>
+
+        <hr class="settings-divider" />
+
+        <!-- Time Tracking Settings -->
+        <div class="settings-section">
+          <h3><AlarmClock :size="18" /> Zeiterfassung Einstellungen</h3>
+          <div class="settings-grid">
+            <div class="settings-item">
+              <div class="settings-info">
+                <label>Standard-Pause</label>
+                <span class="settings-desc">Voreingestellte Pause in Minuten für neue Tage.</span>
+              </div>
+              <div class="settings-control">
+                <input type="number" v-model="userSettings.defaultPause" class="mini-num-input" />
+                <span class="value-display">Minuten</span>
+              </div>
+            </div>
+
+            <div class="settings-item">
+              <div class="settings-info">
+                <label>Wochenarbeitszeit (Ziel)</label>
+                <span class="settings-desc">Stunden pro Woche für die grafische Auswertung.</span>
+              </div>
+              <div class="settings-control">
+                <input type="number" step="0.5" v-model="userSettings.weeklyGoal" class="mini-num-input" />
+                <span class="value-display">Stunden</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1155,6 +1454,129 @@ const pinnedTodos = computed(() => {
         <div v-else class="empty-state">
           <template v-if="searchQuery">Keine Notizen für "{{ searchQuery }}" gefunden.</template>
           <template v-else>Noch keine vergangenen Einträge vorhanden.</template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Time Tracking View -->
+    <div v-if="currentView === 'time' && isAuthenticated" class="time-view">
+      <div class="dashboard-header">
+        <h2><AlarmClock :size="24" /> Arbeitszeiterfassung</h2>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <span v-if="isSavingTime" class="save-indicator">Wird gespeichert...</span>
+          <button class="pure-button mini-btn secondary" @click="exportTimeLogs">
+             <Download :size="14" /> Export (CSV)
+          </button>
+          <button class="pure-button mini-btn secondary" @click="currentView = 'main'">Zurück</button>
+        </div>
+      </div>
+
+      <div class="time-container">
+        <!-- Today's Tracking -->
+        <div class="card time-input-card" :class="{ 'timer-running': getWorkLog(todayKey).isRunning }">
+          <div class="timer-header">
+             <div class="time-info">
+               <span class="date-label">Heute, {{ new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' }) }}</span>
+               <div class="weekly-badge">Woche: {{ getWeekSum(todayKey).toFixed(2).replace('.', ',') }}h</div>
+             </div>
+             <div class="timer-display">
+                <span class="main-total">{{ getRunningTotal(todayKey).toFixed(2).replace('.', ',') }}</span>
+                <span class="unit-large">Stunden</span>
+             </div>
+          </div>
+
+          <div class="timer-controls-area">
+             <div v-if="getWorkLog(todayKey).isRunning" class="live-counter-large">{{ liveTimerString }}</div>
+             <div class="timer-controls">
+                <button v-if="!getWorkLog(todayKey).isRunning" class="pure-button start-btn" @click="startTimer">
+                  <Clock :size="18" /> Start
+                </button>
+                <button v-else class="pure-button stop-btn" @click="stopTimer">
+                  <X :size="18" /> Ende
+                </button>
+             </div>
+          </div>
+
+          <div class="manual-inputs">
+             <div class="input-group">
+               <label>Start</label>
+               <input type="time" :value="getWorkLog(todayKey).start" @input="e => updateTimeField(todayKey, 'start', e.target.value)" />
+             </div>
+             <div class="input-group">
+               <label>Ende</label>
+               <input type="time" :value="getWorkLog(todayKey).end" @input="e => updateTimeField(todayKey, 'end', e.target.value)" />
+             </div>
+             <div class="input-group">
+               <label>Pause (Min)</label>
+               <input type="number" :value="getWorkLog(todayKey).pause" @input="e => updateTimeField(todayKey, 'pause', parseInt(e.target.value) || 0)" />
+             </div>
+          </div>
+        </div>
+
+        <!-- Weekly Chart -->
+        <div class="card time-chart-card">
+          <h3><BarChart3 :size="18" /> Arbeitsstunden pro Woche</h3>
+          <div class="time-chart-container">
+            <div v-for="stat in weeklyStats" :key="stat.week + '-' + stat.year" class="time-chart-bar-wrapper">
+              <div class="time-chart-bar-outer" :title="stat.total.toFixed(2) + 'h'">
+                <div class="time-chart-bar" :style="{ height: Math.min(100, (stat.total / (userSettings.weeklyGoal || 40)) * 100) + '%' }" :class="{ 'goal-met': stat.total >= (userSettings.weeklyGoal || 40) }">
+                  <span class="bar-value" v-if="stat.total > 0">{{ stat.total.toFixed(1) }}</span>
+                </div>
+              </div>
+              <span class="bar-label">KW {{ stat.week }}</span>
+            </div>
+          </div>
+          <div class="chart-legend">
+             <span class="legend-item"><span class="color-box goal"></span> Ziel ({{ userSettings.weeklyGoal || 40 }}h)</span>
+             <span class="legend-item"><span class="color-box met"></span> Ziel erreicht</span>
+          </div>
+        </div>
+
+        <!-- History -->
+        <div class="time-history-section">
+          <div class="history-header">
+             <h3>Verlauf</h3>
+             <div v-if="firstTimeEntryDate" class="first-entry-info">
+               Erster Eintrag: <strong>{{ new Date(firstTimeEntryDate).toLocaleDateString('de-DE') }}</strong>
+             </div>
+          </div>
+          
+          <div class="history-filters card slim">
+             <div class="filter-group">
+                <label>Von</label>
+                <input type="date" v-model="timeFilter.from" />
+             </div>
+             <div class="filter-group">
+                <label>Bis</label>
+                <input type="date" v-model="timeFilter.to" />
+             </div>
+          </div>
+
+          <div class="card time-list-card">
+            <div v-for="dateKey in filteredHistoryKeys" :key="dateKey" class="time-history-row-wrapper">
+               <div class="time-history-row" :class="{ 'is-running': getWorkLog(dateKey).isRunning }">
+                 <div class="history-date">
+                   <span class="day-name">{{ new Date(dateKey).toLocaleDateString('de-DE', { weekday: 'short' }) }}</span>
+                   <span class="day-num">{{ new Date(dateKey).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) }}</span>
+                 </div>
+                 <div class="history-times">
+                   <input type="time" class="mini-time" :value="getWorkLog(dateKey).start" @input="e => updateTimeField(dateKey, 'start', e.target.value)" />
+                   <span class="separator">-</span>
+                   <input type="time" class="mini-time" :value="getWorkLog(dateKey).end" @input="e => updateTimeField(dateKey, 'end', e.target.value)" />
+                 </div>
+                 <div class="history-pause">
+                   <input type="number" class="mini-num" title="Pause in Minuten" :value="getWorkLog(dateKey).pause" @input="e => updateTimeField(dateKey, 'pause', parseInt(e.target.value) || 0)" />
+                   <span class="mini-unit">m</span>
+                 </div>
+                 <div class="history-total">
+                   {{ getRunningTotal(dateKey).toFixed(2).replace('.', ',') }}h
+                 </div>
+               </div>
+               <div v-if="new Date(dateKey).getDay() === 0" class="weekly-total-row">
+                  Wochensumme: {{ getWeekSum(dateKey).toFixed(2).replace('.', ',') }}h
+               </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1449,14 +1871,19 @@ const pinnedTodos = computed(() => {
 
 .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
 .settings-view { padding: 1rem; max-width: 800px; margin: 0 auto; }
-.settings-container { padding: 2rem; }
-.settings-grid { display: flex; flex-direction: column; gap: 2rem; }
-.settings-item { display: flex; justify-content: space-between; align-items: center; gap: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); }
-.settings-item:last-child { border-bottom: none; }
-.settings-info { flex: 1; }
-.settings-info label { display: block; font-weight: 600; color: var(--text-heading); margin-bottom: 0.25rem; }
-.settings-desc { font-size: 0.85rem; color: var(--text-muted); }
-.settings-control { display: flex; align-items: center; gap: 1rem; min-width: 250px; }
+.settings-container { padding: 0; overflow: hidden; }
+.settings-grid { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+.settings-section { padding: 0 1.5rem 1.5rem; }
+.settings-section h3 { font-size: 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-heading); }
+.settings-divider { border: 0; border-top: 1px solid var(--border-color); margin: 0; }
+
+.settings-item { display: flex; justify-content: space-between; align-items: center; gap: 2rem; }
+.settings-info { display: flex; flex-direction: column; gap: 0.25rem; }
+.settings-info label { font-weight: 700; color: var(--text-heading); font-size: 0.95rem; }
+.settings-desc { font-size: 0.8rem; color: var(--text-muted); }
+.settings-control { display: flex; align-items: center; gap: 1rem; }
+.mini-num-input { border: 1px solid var(--border-color); border-radius: 0.4rem; padding: 0.4rem; width: 60px; font-weight: 700; text-align: center; background: var(--bg-app); color: var(--text-heading); }
+.checkbox-label { font-size: 0.85rem; color: var(--text-heading); font-weight: 500; }
 .range-slider { flex: 1; accent-color: var(--primary); cursor: pointer; }
 .value-display { font-family: monospace; font-size: 0.9rem; color: var(--primary); font-weight: 700; min-width: 3rem; text-align: right; }
 
@@ -1495,6 +1922,72 @@ input:checked + .slider:before { transform: translateX(20px); }
 .search-result-count { font-size: 0.8rem; font-weight: normal; color: var(--text-muted); margin-left: 0.5rem; }
 
 .dashboard-header h2 { margin: 0; display: flex; align-items: center; gap: 0.75rem; color: var(--text-heading); }
+
+/* Time Tracking Styles */
+.time-view { padding: 1rem; max-width: 800px; margin: 0 auto; }
+.time-container { display: flex; flex-direction: column; gap: 2rem; }
+.time-input-card { padding: 2rem; border-top: 4px solid #10b981; position: relative; }
+.time-input-card.timer-running { border-top-color: #ef4444; background: #fffcfc; }
+.dark-mode .time-input-card.timer-running { background: #2d1a1a; }
+
+.timer-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+.timer-display { text-align: right; }
+.main-total { font-size: 3rem; font-weight: 800; color: var(--text-heading); display: block; line-height: 1; }
+.unit-large { font-size: 1rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+
+.timer-controls-area { display: flex; flex-direction: column; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+.live-counter-large { font-family: monospace; font-size: 2.5rem; font-weight: 700; color: #ef4444; letter-spacing: 2px; }
+
+.timer-controls { display: flex; justify-content: center; }
+
+.mini-live-timer { font-size: 0.65rem; font-weight: 700; color: #ef4444; font-family: monospace; margin-left: 0.3rem; background: rgba(239, 68, 68, 0.1); padding: 0.1rem 0.3rem; border-radius: 4px; }
+.mini-live-timer.mobile { position: absolute; top: -5px; right: -5px; font-size: 0.55rem; padding: 0.05rem 0.2rem; }
+
+.start-btn { background: #10b981; color: white; padding: 0.75rem 2.5rem; border-radius: 3rem; font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s; border: none; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+.start-btn:hover { background: #059669; transform: translateY(-2px); }
+.stop-btn { background: #ef4444; color: white; padding: 0.75rem 2.5rem; border-radius: 3rem; font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s; border: none; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); }
+.stop-btn:hover { background: #dc2626; transform: translateY(-2px); }
+
+.manual-inputs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); }
+.input-group { display: flex; flex-direction: column; gap: 0.4rem; }
+.input-group label { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+.input-group input { border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.5rem; font-size: 1rem; font-weight: 600; background: var(--bg-card); color: var(--text-heading); }
+
+.history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.first-entry-info { font-size: 0.75rem; color: var(--text-muted); background: var(--bg-app); padding: 0.2rem 0.6rem; border-radius: 2rem; border: 1px solid var(--border-color); }
+
+.history-filters { display: flex; gap: 1.5rem; padding: 1rem !important; margin-bottom: 1rem; background: var(--bg-card); }
+.filter-group { display: flex; align-items: center; gap: 0.75rem; }
+.filter-group label { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+.filter-group input { border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.3rem 0.6rem; font-size: 0.85rem; background: var(--bg-app); color: var(--text-heading); }
+
+.time-history-row { display: grid; grid-template-columns: 80px 1fr 100px 80px; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color); }
+.time-history-row.is-running { background: rgba(239, 68, 68, 0.05); }
+.history-times { display: flex; align-items: center; gap: 0.5rem; justify-content: center; }
+.mini-time { border: 1px solid var(--border-color); border-radius: 0.25rem; padding: 0.2rem; font-size: 0.85rem; width: 85px; text-align: center; background: var(--bg-card); color: var(--text-heading); }
+.history-pause { display: flex; align-items: center; gap: 0.2rem; justify-content: center; }
+.mini-num { border: 1px solid var(--border-color); border-radius: 0.25rem; padding: 0.2rem; font-size: 0.85rem; width: 45px; text-align: center; background: var(--bg-card); color: var(--text-heading); }
+.mini-unit { font-size: 0.7rem; color: var(--text-muted); }
+.history-total { font-weight: 800; color: var(--text-heading); text-align: right; }
+
+.weekly-total-row { background: #f3f4f6; padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 800; color: var(--primary); text-align: center; border-radius: 0.5rem; margin: 0.5rem 1rem; }
+.dark-mode .weekly-total-row { background: #1f2937; }
+
+.time-chart-card { padding: 1.5rem; }
+.time-chart-container { display: flex; align-items: flex-end; justify-content: space-between; height: 150px; padding: 1rem 0; gap: 0.5rem; border-bottom: 2px solid var(--border-color); margin-bottom: 0.5rem; }
+.time-chart-bar-wrapper { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; height: 100%; }
+.time-chart-bar-outer { width: 100%; background: var(--bg-app); border-radius: 4px 4px 0 0; height: 100%; display: flex; align-items: flex-end; position: relative; }
+.time-chart-bar { width: 100%; background: #93c5fd; border-radius: 4px 4px 0 0; position: relative; transition: height 0.5s ease-out; min-height: 2px; }
+.time-chart-bar.goal-met { background: #10b981; }
+.bar-value { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 0.65rem; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+.bar-label { font-size: 0.65rem; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+
+.chart-legend { display: flex; gap: 1rem; margin-top: 0.5rem; justify-content: center; }
+.legend-item { display: flex; align-items: center; gap: 0.3rem; font-size: 0.7rem; color: var(--text-muted); }
+.color-box { width: 10px; height: 10px; border-radius: 2px; }
+.color-box.goal { background: #93c5fd; }
+.color-box.met { background: #10b981; }
+
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
 .stat-card { display: flex; flex-direction: column; justify-content: center; padding: 1.5rem; transition: transform 0.2s; }
 .stat-card:hover { transform: translateY(-3px); }

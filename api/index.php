@@ -37,6 +37,13 @@ function read_secure_file($filename) {
     return json_decode($json, true);
 }
 
+function log_debug($msg) {
+    $path = 'data/debug.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $formatted = "[$timestamp] $msg\n";
+    file_put_contents($path, $formatted, FILE_APPEND);
+}
+
 function write_secure_file($filename, $data) {
     global $data_dir, $encryption_key;
     $json = json_encode($data, JSON_PRETTY_PRINT);
@@ -421,6 +428,17 @@ elseif ($path === '/notes/archive' && $method === 'GET') {
 elseif ($path === '/notes/archive' && $method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     write_secure_file('notes_archive.json', $data);
+    echo json_encode(['success' => true]);
+}
+elseif ($path === '/time' && $method === 'GET') {
+    $data = read_secure_file('time_tracking.json') ?: new stdClass();
+    log_debug("GET /time: " . json_encode($data));
+    echo json_encode($data);
+}
+elseif ($path === '/time' && $method === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    log_debug("POST /time: " . json_encode($data));
+    write_secure_file('time_tracking.json', $data);
     echo json_encode(['success' => true]);
 }
 else {
