@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import draggable from 'vuedraggable'
-import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2, ArrowDown, HelpCircle, Menu, Sun, Moon } from 'lucide-vue-next'
+import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2, ArrowDown, HelpCircle, Menu, Sun, Moon, BarChart3, AlertCircle, CheckCircle } from 'lucide-vue-next'
 import Editor from './components/Editor.vue'
 import TodoItem from './components/TodoItem.vue'
 import BackupModal from './components/BackupModal.vue'
@@ -484,6 +484,32 @@ watch(isDarkMode, (val) => {
     document.documentElement.classList.remove('dark-mode')
   }
 }, { immediate: true })
+
+const stats = computed(() => {
+  const total = todos.value.length
+  if (total === 0) return { total: 0, completed: 0, pending: 0, percent: 0, overdue: 0, topTags: [] }
+  
+  const completed = todos.value.filter(t => t.status === 'erledigt').length
+  const pending = total - completed
+  const percent = Math.round((completed / total) * 100)
+  
+  const now = new Date().toISOString().split('T')[0]
+  const overdue = todos.value.filter(t => t.status !== 'erledigt' && t.targetDate && t.targetDate < now).length
+  
+  const tagCounts = {}
+  todos.value.forEach(t => {
+    if (t.tags) {
+      t.tags.forEach(tag => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1
+      })
+    }
+  })
+  const topTags = Object.entries(tagCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    
+  return { total, completed, pending, percent, overdue, topTags }
+})
 </script>
 
 <template>
@@ -493,7 +519,15 @@ watch(isDarkMode, (val) => {
       <div class="top-bar-inner">
         <!-- Logo Area -->
         <div class="logo-area">
-          <h1 class="logo">Aufgabenliste</h1>
+          <div class="flattask-logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 10H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 14H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9 17L11 19L15 15" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h1 class="logo">Flattask</h1>
           <button class="dark-mode-toggle" @click="toggleDarkMode" :title="isDarkMode ? 'Heller Modus' : 'Dunkler Modus'">
             <Sun v-if="isDarkMode" :size="14" />
             <Moon v-else :size="14" />
@@ -552,6 +586,10 @@ watch(isDarkMode, (val) => {
             <X :size="12" />
           </button>
 
+          <button class="pure-button mini-btn secondary" @click="currentView = currentView === 'stats' ? 'main' : 'stats'" :class="{ 'admin-active': currentView === 'stats' }" title="Statistik">
+            <BarChart3 :size="14" />
+          </button>
+
           <button class="pure-button mini-btn secondary" @click="showBackupModal = true" title="Backup & Archiv">
             <HardDrive :size="14" />
           </button>
@@ -593,7 +631,15 @@ watch(isDarkMode, (val) => {
         </button>
         
         <div class="logo-group">
-          <h1 class="logo mobile-logo">Aufgabenliste</h1>
+          <div class="flattask-logo mini">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 10H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 14H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9 17L11 19L15 15" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h1 class="logo mobile-logo">Flattask</h1>
           <button class="dark-mode-toggle mini" @click="toggleDarkMode">
             <Sun v-if="isDarkMode" :size="12" />
             <Moon v-else :size="12" />
@@ -674,10 +720,13 @@ watch(isDarkMode, (val) => {
              <button v-if="aggregation !== 'none' || groupByTags || activeTags.length || showCompleted" class="pure-button mini-btn secondary drawer-btn" @click="resetAll">
                <X :size="14" /> Alle Filter zurücksetzen
              </button>
-             
-             <button class="pure-button mini-btn secondary drawer-btn" @click="showBackupModal = true; mobileMenuOpen = false">
-               <HardDrive :size="14" /> Backup & Archiv
-             </button>
+             <button class="pure-button mini-btn secondary drawer-btn" @click="currentView = 'stats'; mobileMenuOpen = false">
+                <BarChart3 :size="14" /> Statistik Dashboard
+              </button>
+
+              <button class="pure-button mini-btn secondary drawer-btn" @click="showBackupModal = true; mobileMenuOpen = false">
+                <HardDrive :size="14" /> Backup & Archiv
+              </button>
 
              <button class="pure-button mini-btn secondary drawer-btn" @click="currentView = 'profile'; mobileMenuOpen = false">
                <User :size="14" /> Zugangsdaten
@@ -728,7 +777,7 @@ watch(isDarkMode, (val) => {
       <template v-if="aggregation === 'none' && !groupByTags">
         <draggable :model-value="sortedTodos" item-key="id" handle=".drag-handle" :animation="200" ghost-class="ghost" @update:model-value="handleReorder" :disabled="activeTags.length > 0 || activeSort.by !== 'order'">
           <template #item="{ element }">
-            <TodoItem :todo="element" :all-tags="allTags" :can-drag="activeTags.length === 0 && activeSort.by === 'order'" @update="(updates) => updateTodo(element.id, updates)" @delete="deleteTodo(element.id)" />
+            <TodoItem :todo="element" :all-tags="allTags" :can-drag="activeTags.length === 0 && activeSort.by === 'order'" :search-query="searchQuery" @update="(updates) => updateTodo(element.id, updates)" @delete="deleteTodo(element.id)" />
           </template>
         </draggable>
         <div v-if="sortedTodos.length === 0" class="empty-state">Keine Aufgaben gefunden.</div>
@@ -746,7 +795,7 @@ watch(isDarkMode, (val) => {
               <div class="group-items">
                 <draggable :model-value="sub.items" group="todos" item-key="id" handle=".drag-handle" :animation="200" ghost-class="ghost" @change="(evt) => handleGroupChange(evt, group.key)" :disabled="activeSort.by !== 'order' || activeTags.length > 0">
                   <template #item="{ element }">
-                    <TodoItem :todo="element" :all-tags="allTags" :can-drag="activeSort.by === 'order' && activeTags.length === 0" @update="(updates) => updateTodo(element.id, updates)" @delete="deleteTodo(element.id)" />
+                    <TodoItem :todo="element" :all-tags="allTags" :can-drag="activeSort.by === 'order' && activeTags.length === 0" :search-query="searchQuery" @update="(updates) => updateTodo(element.id, updates)" @delete="deleteTodo(element.id)" />
                   </template>
                 </draggable>
               </div>
@@ -755,7 +804,7 @@ watch(isDarkMode, (val) => {
           <div v-else class="group-items">
             <draggable :model-value="group.items" group="todos" item-key="id" handle=".drag-handle" :animation="200" ghost-class="ghost" @change="(evt) => handleGroupChange(evt, group.key)" :disabled="activeSort.by !== 'order' || activeTags.length > 0">
               <template #item="{ element }">
-                <TodoItem :todo="element" :all-tags="allTags" :can-drag="activeSort.by === 'order' && activeTags.length === 0" @update="(updates) => updateTodo(element.id, updates)" @delete="deleteTodo(element.id)" />
+                <TodoItem :todo="element" :all-tags="allTags" :can-drag="activeSort.by === 'order' && activeTags.length === 0" :search-query="searchQuery" @update="(updates) => updateTodo(element.id, updates)" @delete="deleteTodo(element.id)" />
               </template>
             </draggable>
           </div>
@@ -781,6 +830,67 @@ watch(isDarkMode, (val) => {
           <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
             <button class="pure-button pure-button-primary pure-input-1" @click="updateCredentials">Speichern</button>
             <button class="pure-button pure-input-1" @click="currentView = 'main'">Abbrechen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-else-if="currentView === 'stats'" class="todo-list">
+      <div class="stats-dashboard">
+        <header class="dashboard-header">
+          <h2><BarChart3 :size="24" /> Produktivitäts-Dashboard</h2>
+          <button class="pure-button mini-btn" @click="currentView = 'main'">Zurück zur Liste</button>
+        </header>
+
+        <div class="stats-grid">
+          <div class="card stat-card primary">
+            <div class="stat-icon"><CheckCircle :size="32" /></div>
+            <div class="stat-info">
+              <span class="stat-label">Fortschritt</span>
+              <span class="stat-value">{{ stats.percent }}%</span>
+              <div class="stat-progress-bg">
+                <div class="stat-progress-bar" :style="{ width: stats.percent + '%' }"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card stat-card">
+            <div class="stat-label">Aufgaben Gesamt</div>
+            <div class="stat-value">{{ stats.total }}</div>
+          </div>
+
+          <div class="card stat-card success">
+            <div class="stat-label">Erledigt</div>
+            <div class="stat-value">{{ stats.completed }}</div>
+          </div>
+
+          <div class="card stat-card warning">
+            <div class="stat-label">Offen</div>
+            <div class="stat-value">{{ stats.pending }}</div>
+          </div>
+
+          <div v-if="stats.overdue > 0" class="card stat-card danger">
+            <div class="stat-icon"><AlertCircle :size="20" /></div>
+            <div class="stat-info">
+              <span class="stat-label">Überfällig</span>
+              <span class="stat-value">{{ stats.overdue }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-row">
+          <div class="card chart-card">
+            <h3><Tag :size="18" /> Top Tags</h3>
+            <div class="tag-stats">
+              <div v-for="[tag, count] in stats.topTags" :key="tag" class="tag-stat-item">
+                <span class="tag-name">{{ tag }}</span>
+                <div class="tag-bar-wrapper">
+                  <div class="tag-bar" :style="{ width: (count / stats.total * 100) + '%' }"></div>
+                </div>
+                <span class="tag-count">{{ count }}</span>
+              </div>
+              <div v-if="stats.topTags.length === 0" class="empty-msg">Noch keine Tags vergeben.</div>
+            </div>
           </div>
         </div>
       </div>
@@ -889,7 +999,9 @@ watch(isDarkMode, (val) => {
   .mobile-top-bar-inner { display: flex; align-items: center; justify-content: space-between; width: 100%; position: relative; }
   
   .hamburger-btn { background: transparent; border: none; padding: 0.3rem; display: flex; align-items: center; justify-content: center; }
-  .mobile-logo { font-size: 1.1rem; font-weight: 800; color: var(--primary); margin: 0; position: absolute; left: 50%; transform: translateX(-50%); }
+  .mobile-logo { font-size: 1.25rem; font-weight: 800; color: var(--text-heading); margin: 0; letter-spacing: -0.025em; }
+  .flattask-logo { color: var(--text-heading); display: flex; align-items: center; justify-content: center; margin-right: 0.5rem; }
+  .flattask-logo.mini { margin-right: 0.4rem; }
   
   .mobile-quick-actions { display: flex; align-items: center; gap: 0.5rem; }
   .mobile-search-btn { position: relative; width: 32px; height: 32px; background: #f3f4f6; color: #4b5563; }
@@ -1043,4 +1155,39 @@ watch(isDarkMode, (val) => {
 
 .text-center { text-align: center; }
 .mt-2 { margin-top: 0.5rem; }
+.stats-dashboard { padding: 1rem; }
+.dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
+.dashboard-header h2 { margin: 0; display: flex; align-items: center; gap: 0.75rem; color: var(--text-heading); }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+.stat-card { display: flex; flex-direction: column; justify-content: center; padding: 1.5rem; transition: transform 0.2s; }
+.stat-card:hover { transform: translateY(-3px); }
+.stat-card.primary { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; }
+.stat-card.success { border-left: 4px solid #10b981; }
+.stat-card.warning { border-left: 4px solid #f59e0b; }
+.stat-card.danger { border-left: 4px solid #ef4444; color: #ef4444; }
+.stat-card.primary .stat-label { color: rgba(255,255,255,0.8); }
+.stat-card.primary .stat-value { color: white; }
+.stat-label { font-size: 0.85rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em; margin-bottom: 0.5rem; }
+.stat-value { font-size: 2rem; font-weight: 800; color: var(--text-heading); }
+.stat-icon { margin-bottom: 0.5rem; opacity: 0.8; }
+.stat-progress-bg { background: rgba(255,255,255,0.2); height: 6px; border-radius: 10px; margin-top: 1rem; overflow: hidden; }
+.stat-progress-bar { background: white; height: 100%; border-radius: 10px; transition: width 1s ease-out; }
+.dashboard-row { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+.chart-card h3 { margin-top: 0; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; font-size: 1.1rem; }
+.tag-stats { display: flex; flex-direction: column; gap: 1rem; }
+.tag-stat-item { display: grid; grid-template-columns: 100px 1fr 40px; align-items: center; gap: 1rem; }
+.tag-name { font-size: 0.85rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-bar-wrapper { background: var(--tag-bg); height: 8px; border-radius: 4px; overflow: hidden; }
+.tag-bar { background: var(--primary); height: 100%; border-radius: 4px; }
+.tag-count { font-size: 0.85rem; font-weight: 600; text-align: right; color: var(--text-muted); }
+.empty-msg { text-align: center; color: var(--text-muted); font-style: italic; padding: 2rem; }
+
+.dark-mode .stat-card:not(.primary) { background: #1f2937; }
+.dark-mode .stat-progress-bg { background: rgba(255,255,255,0.1); }
+
+@media (max-width: 640px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .stat-value { font-size: 1.5rem; }
+  .dashboard-header h2 { font-size: 1.25rem; }
+}
 </style>

@@ -10,7 +10,8 @@ const props = defineProps({
   isArchive: {
     type: Boolean,
     default: false
-  }
+  },
+  searchQuery: String
 })
 
 const emit = defineEmits(['update', 'delete', 'revive'])
@@ -44,6 +45,23 @@ const titleFontSize = computed(() => {
   if (len <= 40) return '0.8rem'
   if (len <= 60) return '0.75rem'
   return '0.7rem'
+})
+
+const escapeHtml = (unsafe) => {
+  if (!unsafe) return ''
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+const highlightedName = computed(() => {
+  const escaped = escapeHtml(props.todo.name)
+  if (!props.searchQuery) return escaped
+  const regex = new RegExp(`(${escapeHtml(props.searchQuery)})`, 'gi')
+  return escaped.replace(regex, '<mark class="highlight">$1</mark>')
 })
 
 const itemRef = ref(null)
@@ -176,7 +194,7 @@ const openPicker = () => {
         <div class="view-mode">
           <div class="name-row">
             <div v-if="!isEditingTitle" class="name-container" @mouseenter="checkOverflow" @mouseleave="hideTooltip">
-              <span ref="nameRef" class="name editable-text" :class="{ 'is-completed': todo.status === 'erledigt' }" @click.stop="isEditingTitle = true" :style="{ fontSize: titleFontSize }">{{ todo.name }}</span>
+              <span ref="nameRef" class="name editable-text" :class="{ 'is-completed': todo.status === 'erledigt' }" @click.stop="isEditingTitle = true" :style="{ fontSize: titleFontSize }" v-html="highlightedName"></span>
               <div v-if="showTooltip" class="custom-tooltip">{{ todo.name }}</div>
             </div>
             <input v-else v-model="localTodo.name" class="pure-u-1 mini-input inline-title-input" @keyup.enter="saveTitle" @keyup.esc="cancelTitle" @blur="saveTitle" maxlength="500" autofocus @click.stop :style="{ fontSize: titleFontSize }" />
@@ -253,6 +271,8 @@ const openPicker = () => {
 .name-row { display: flex; align-items: center; gap: 0.75rem; }
 .name { font-weight: 500; color: var(--text-heading); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; display: block; }
 .name.is-completed { text-decoration: line-through; color: var(--text-muted); }
+.name :deep(.highlight) { background: #fde047; color: #000; border-radius: 2px; padding: 0 1px; }
+.dark-mode .name :deep(.highlight) { background: #ca8a04; color: #fff; }
 .meta-inline { display: flex; gap: 0.4rem; align-items: center; margin-left: auto; }
 .tags-list { display: flex; gap: 0.25rem; }
 .badge { display: inline-flex; align-items: center; gap: 0.2rem; background: var(--tag-bg); color: var(--tag-color); padding: 0.05rem 0.4rem; border-radius: 2rem; font-size: 0.65rem; cursor: pointer; border: 1px solid transparent; }
