@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
-import { GripVertical, Trash2, Calendar, Tag, ChevronDown, ChevronUp, Edit2, Check, X, ArchiveRestore, Circle, CheckCircle2, Pin, PinOff } from 'lucide-vue-next'
+import { GripVertical, Trash2, Calendar, Tag, ChevronDown, ChevronUp, Edit2, Check, X, ArchiveRestore, Circle, CheckCircle2, Pin, PinOff, MoreVertical } from 'lucide-vue-next'
 import Editor from './Editor.vue'
 
 const props = defineProps({
@@ -26,6 +26,7 @@ const tagInput = ref(props.todo.tags ? props.todo.tags.join(', ') : '')
 const nameRef = ref(null)
 const isOverflowing = ref(false)
 const showTooltip = ref(false)
+const showMoreMenu = ref(false)
 
 const checkOverflow = () => {
   if (nameRef.value) {
@@ -71,6 +72,7 @@ const handleClickOutside = (event) => {
     if (isEditingTitle.value) saveTitle()
     if (isEditingTags.value) saveTags()
     if (isEditingDescription.value) saveDescription()
+    showMoreMenu.value = false
   }
 }
 
@@ -194,6 +196,14 @@ const openPicker = () => {
       <div class="drag-handle" v-if="canDrag && !todo.pinned && !isArchive">
         <GripVertical :size="16" />
       </div>
+      
+      <div v-if="!isArchive" class="status-check-container">
+        <button class="pure-button btn-icon small status-btn" @click.stop="toggleStatus" :title="todo.status === 'erledigt' ? 'Als offen markieren' : 'Als erledigt markieren'">
+          <CheckCircle2 v-if="todo.status === 'erledigt'" :size="16" class="text-success" />
+          <Circle v-else :size="16" />
+        </button>
+      </div>
+
       <div class="pinned-indicator" v-if="todo.pinned">
         <Pin :size="12" fill="currentColor" />
       </div>
@@ -209,10 +219,10 @@ const openPicker = () => {
             
             <div class="meta-inline">
               <div v-if="!isEditingTags" class="tags-list editable-text" @click.stop="isEditingTags = true" title="Tags bearbeiten">
-                <span v-if="!todo.tags || todo.tags.length === 0" class="badge empty-badge"><Tag :size="8"/> +</span>
                 <span v-for="tag in todo.tags" :key="tag" class="badge">
                   <Tag :size="8" /> {{ tag }}
                 </span>
+                <span v-if="!todo.tags || todo.tags.length === 0" class="badge empty-badge">+ Tag</span>
               </div>
               <div v-else class="inline-tag-edit-container" @click.stop>
                 <div v-if="allTags && allTags.length > 0" class="suggested-tags inline-suggestions">
@@ -250,15 +260,32 @@ const openPicker = () => {
             <button class="pure-button btn-icon small" @click.stop="cancelDelete" title="Abbrechen"><X :size="12" /></button>
           </template>
           <template v-else>
-            <button class="pure-button btn-icon small" @click.stop="toggleStatus" :title="todo.status === 'erledigt' ? 'Als offen markieren' : 'Als erledigt markieren'">
-              <CheckCircle2 v-if="todo.status === 'erledigt'" :size="14" class="text-success" />
-              <Circle v-else :size="14" />
-            </button>
-            <button class="btn-icon small" @click.stop="togglePin" :title="todo.pinned ? 'Anheften aufheben' : 'Anheften'" :class="{ 'is-active': todo.pinned }">
-              <Pin :size="14" :fill="todo.pinned ? 'currentColor' : 'none'" />
-            </button>
-            <button class="pure-button btn-icon small btn-danger" @click.stop="requestDelete" title="Löschen"><Trash2 :size="14" /></button>
-            <button class="pure-button btn-icon small" @click.stop="isExpanded = !isExpanded">
+            <!-- Desktop Actions -->
+            <div class="desktop-actions">
+              <button class="btn-icon small pin-btn" @click.stop="togglePin()" :title="todo.pinned ? 'Anheften aufheben' : 'Anheften'" :class="{ 'is-active': todo.pinned }">
+                <Pin :size="14" :fill="todo.pinned ? 'currentColor' : 'none'" />
+              </button>
+              <button class="pure-button btn-icon small btn-danger" @click.stop="requestDelete()" title="Löschen"><Trash2 :size="14" /></button>
+            </div>
+
+            <!-- More Menu (Mobile Only) -->
+            <div class="more-menu-container mobile-only">
+              <button class="btn-icon small more-btn" @click.stop="showMoreMenu = !showMoreMenu" title="Mehr Optionen">
+                <MoreVertical :size="14" />
+              </button>
+              <transition name="fade">
+                <div v-if="showMoreMenu" class="more-dropdown card slim" @click.stop>
+                  <button class="dropdown-item" @click.stop="togglePin(); showMoreMenu = false">
+                    <Pin :size="12" :fill="todo.pinned ? 'currentColor' : 'none'" /> {{ todo.pinned ? 'Lösen' : 'Anheften' }}
+                  </button>
+                  <button class="dropdown-item logout" @click.stop="requestDelete(); showMoreMenu = false">
+                    <Trash2 :size="12" /> Löschen
+                  </button>
+                </div>
+              </transition>
+            </div>
+            
+            <button class="pure-button btn-icon small expand-btn" @click.stop="isExpanded = !isExpanded" :class="{ 'is-active': isExpanded }">
               <ChevronDown v-if="!isExpanded" :size="14" />
               <ChevronUp v-else :size="14" />
             </button>
@@ -328,6 +355,21 @@ const openPicker = () => {
 .name-container { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
 .custom-tooltip { position: absolute; bottom: calc(100% + 5px); left: 0; background: #1f2937; color: white; padding: 0.4rem 0.8rem; border-radius: 0.4rem; font-size: 0.8rem; z-index: 2000; white-space: normal; min-width: 200px; max-width: 400px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); pointer-events: none; line-height: 1.4; border: 1px solid rgba(255,255,255,0.1); }
 .custom-tooltip::after { content: ''; position: absolute; top: 100%; left: 15px; border-width: 5px; border-style: solid; border-color: #1f2937 transparent transparent transparent; }
+
+.desktop-actions { display: flex; gap: 0.1rem; }
+.mobile-only { display: none; }
+@media (max-width: 768px) {
+  .desktop-actions { display: none; }
+  .mobile-only { display: flex; }
+}
+
+.more-menu-container { position: relative; display: inline-flex; }
+.more-dropdown { position: absolute; top: 100%; right: 0; width: 120px; z-index: 1000; padding: 0.25rem !important; display: flex; flex-direction: column; gap: 0.1rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border: 1px solid var(--border-color); background: var(--bg-card); }
+.dropdown-item { background: none; border: none; padding: 0.5rem 0.75rem; font-size: 0.8rem; text-align: left; cursor: pointer; border-radius: 0.3rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-main); width: 100%; transition: all 0.1s; }
+.dropdown-item:hover { background: #eff6ff; color: var(--primary); }
+.dropdown-item.logout:hover { color: #ef4444; background: #fef2f2; }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 .inline-tag-edit-container { position: relative; display: inline-flex; align-items: center; }
 .inline-suggestions { 
   position: absolute; 
@@ -350,86 +392,91 @@ const openPicker = () => {
 /* Responsive Design for Tablets and Smartphones */
 @media (max-width: 768px) {
   .main-row {
-    flex-wrap: wrap;
-    padding: 0.2rem 0.5rem;
-    gap: 0.5rem;
-    min-height: auto;
+    flex-wrap: nowrap;
+    padding: 0.25rem 0.4rem;
+    gap: 0.3rem;
+    min-height: 48px;
   }
 
-  .drag-handle {
-    display: none;
+  .status-check-container {
+    margin-right: -0.1rem;
+    flex-shrink: 0;
   }
 
   .content {
-    flex: 1 1 auto;
+    flex: 1;
     min-width: 0;
-    width: 100%;
+    width: auto;
   }
 
   .name-row {
-    flex-wrap: wrap;
-    gap: 0.4rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
     width: 100%;
   }
 
   .name {
     font-size: 0.85rem;
-    flex: 1 1 auto;
-    min-width: 60px;
-    max-width: 100%;
+    line-height: 1.25;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    width: 100%;
   }
 
   .meta-inline {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     width: 100%;
     gap: 0.3rem;
-    font-size: 0.7rem;
-    margin-top: 0.2rem;
+    font-size: 0.6rem;
+    margin-top: 0;
   }
 
   .tags-list {
-    flex-wrap: wrap;
-    gap: 0.2rem;
+    flex-wrap: nowrap;
+    overflow-x: hidden;
+    max-width: 150px;
   }
 
   .badge {
-    font-size: 0.6rem;
-    padding: 0.05rem 0.3rem;
+    font-size: 0.55rem;
+    padding: 0 0.25rem;
+    white-space: nowrap;
   }
 
   .actions {
-    width: 100%;
-    flex-wrap: wrap;
-    gap: 0.2rem;
-    margin-top: 0.3rem;
+    width: auto;
+    flex-wrap: nowrap;
+    gap: 0;
+    margin-top: 0;
+    flex-shrink: 0;
+    align-self: center;
   }
 
   .btn-icon.small {
-    padding: 0.25rem;
-    min-width: 1.8rem;
-    height: 1.8rem;
+    padding: 0.1rem;
+    min-width: 1.6rem;
+    height: 1.6rem;
   }
 
-  .expanded-content {
-    padding: 0.5rem;
+  .more-menu-container {
+    position: relative;
   }
 
-  .description-view {
-    font-size: 0.8rem;
+  .more-dropdown {
+    right: 0;
+    top: 100%;
+    width: 110px;
   }
 
-  .mini-input {
-    padding: 0.25rem 0.5rem !important;
-    font-size: 0.8rem !important;
-  }
-
-  .suggested-tags {
-    gap: 0.15rem;
-  }
-
-  .tag-chip.mini {
-    font-size: 0.55rem;
-    padding: 0.05rem 0.3rem;
+  .dropdown-item {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
   }
 }
 

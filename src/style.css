@@ -2,7 +2,7 @@
   font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
+  box-sizing: border-box;
   color-scheme: light;
   --bg-app: #f3f4f6;
   --bg-card: #ffffff;
@@ -19,6 +19,10 @@
   --tag-color: #4b5563;
   --header-bg: #f3f4f6;
   --input-bg: #ffffff;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
 .dark-mode {

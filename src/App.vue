@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import draggable from 'vuedraggable'
-import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2, ArrowDown, HelpCircle, Menu, Sun, Moon, BarChart3, AlertCircle, CheckCircle, Settings, StickyNote, AlarmClock, Download, ChevronUp, ChevronDown } from 'lucide-vue-next'
+import { Plus, SortAsc, Calendar, Trash2, Tag, X, Clock, Layers, Filter, Archive, HardDrive, User, LogOut, CheckCircle2, ArrowDown, HelpCircle, Menu, Sun, Moon, BarChart3, AlertCircle, CheckCircle, Settings, StickyNote, AlarmClock, Download, ChevronUp, ChevronDown, RefreshCw, Pin } from 'lucide-vue-next'
 import Editor from './components/Editor.vue'
 import TodoItem from './components/TodoItem.vue'
 import BackupModal from './components/BackupModal.vue'
@@ -126,6 +126,21 @@ const toggleSearch = () => {
     setTimeout(() => searchInputRef.value?.focus(), 100)
   }
 }
+
+const reloadPage = () => {
+  sessionStorage.setItem('flattask_reloaded', 'true')
+  window.location.reload()
+}
+
+const showReloadNotification = ref(false)
+const pinnedManualOpen = ref(localStorage.getItem('flattask_pinned_open') === 'true')
+const pinnedHoverActive = ref(false)
+const isPinnedVisible = computed(() => pinnedManualOpen.value || pinnedHoverActive.value)
+
+watch(pinnedManualOpen, (newVal) => {
+  localStorage.setItem('flattask_pinned_open', newVal ? 'true' : 'false')
+})
+
 
 const profileData = ref({ username: 'frost0xx', password: '' })
 const profileStatus = ref('')
@@ -443,7 +458,11 @@ watch(aggregation, (newVal) => {
 
 const allTags = computed(() => {
   const tags = new Set()
-  todos.value.forEach(t => t.tags?.forEach(tag => tags.add(tag)))
+  todos.value.forEach(t => {
+    if (t.status !== 'erledigt') {
+      t.tags?.forEach(tag => tags.add(tag))
+    }
+  })
   return Array.from(tags).sort()
 })
 
@@ -523,6 +542,14 @@ const handleImported = () => {
 const userMenuContainer = ref(null)
 
 onMounted(() => {
+  if (sessionStorage.getItem('flattask_reloaded') === 'true') {
+    showReloadNotification.value = true
+    sessionStorage.removeItem('flattask_reloaded')
+    setTimeout(() => {
+      showReloadNotification.value = false
+    }, 800)
+  }
+
   applyVisualSettings()
   if (isAuthenticated.value) {
     fetchData()
@@ -912,20 +939,26 @@ const pinnedTodos = computed(() => {
 
 <template>
   <div class="app-container">
+    <!-- Reload Notification Bar -->
+    <transition name="slide-down">
+      <div v-if="showReloadNotification" class="reload-notification">
+        <RefreshCw :size="14" class="spin-icon" /> Seite wird neu geladen
+      </div>
+    </transition>
     <!-- 1. DESKTOP NAV -->
     <div class="top-bar card slim desktop-nav">
       <div class="top-bar-inner">
         <!-- Logo Area -->
         <div class="logo-area">
-          <div class="flattask-logo">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M4 10H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M4 14H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M9 17L11 19L15 15" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <h1 class="logo">Flattask</h1>
+            <div class="flattask-logo">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 10H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 14H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M9 17L11 19L15 15" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          <h1 class="logo" @click="reloadPage" style="cursor: pointer;" title="Seite neu laden">Flattask</h1>
           <div class="nav-icons-group">
             <button class="dark-mode-toggle" @click="toggleDarkMode" :title="isDarkMode ? 'Heller Modus' : 'Dunkler Modus'">
               <Sun v-if="isDarkMode" :size="14" />
@@ -1041,15 +1074,15 @@ const pinnedTodos = computed(() => {
         </button>
         
         <div class="logo-group">
-          <div class="flattask-logo mini">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M4 10H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M4 14H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M9 17L11 19L15 15" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <h1 class="logo mobile-logo">Flattask</h1>
+            <div class="flattask-logo mini">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 10H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 14H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M9 17L11 19L15 15" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          <h1 class="logo mobile-logo" @click="reloadPage" style="cursor: pointer;" title="Seite neu laden">Flattask</h1>
           <div class="mobile-nav-icons">
              <button class="dark-mode-toggle" @click="toggleDarkMode">
                <Sun v-if="isDarkMode" :size="20" />
@@ -1085,14 +1118,42 @@ const pinnedTodos = computed(() => {
       </div>
     </div>
 
-    <!-- Pinned Aggregation Section -->
-    <div v-if="pinnedTodos.length > 0 && currentView === 'main'" class="pinned-aggregation card slim">
-      <div class="pinned-header">
-        <Pin :size="14" fill="currentColor" /> Angeheftete Aufgaben
+    <!-- Pinned Tasks Section (Unified Container) -->
+    <div 
+      v-if="pinnedTodos.length > 0" 
+      class="pinned-section-container"
+      @mouseenter="pinnedHoverActive = true"
+      @mouseleave="pinnedHoverActive = false"
+    >
+      <div class="pinned-toggle-wrapper">
+        <button 
+          class="pinned-toggle-btn" 
+          :class="{ active: isPinnedVisible }"
+          @click="pinnedManualOpen = !pinnedManualOpen"
+          :title="isPinnedVisible ? 'Angeheftete Aufgaben einklappen' : 'Angeheftete Aufgaben ausklappen'"
+        >
+          <div class="toggle-content">
+            <ChevronDown v-if="!isPinnedVisible" :size="12" />
+            <ChevronUp v-else :size="12" />
+            <span class="pinned-count-badge">{{ pinnedTodos.length }}</span>
+          </div>
+        </button>
       </div>
-      <div class="pinned-items">
-        <TodoItem v-for="todo in pinnedTodos" :key="'pinned-' + todo.id" :todo="todo" :all-tags="allTags" :can-drag="false" :search-query="searchQuery" @update="(updates) => updateTodo(todo.id, updates)" @delete="deleteTodo(todo.id)" />
-      </div>
+
+      <transition name="expand">
+        <div 
+          v-if="isPinnedVisible" 
+          class="pinned-aggregation card slim"
+          :class="{ 'is-overlay': !pinnedManualOpen }"
+        >
+          <div class="pinned-header">
+            <Pin :size="14" fill="currentColor" /> Angeheftete Aufgaben
+          </div>
+          <div class="pinned-items">
+            <TodoItem v-for="todo in pinnedTodos" :key="'pinned-' + todo.id" :todo="todo" :all-tags="allTags" :can-drag="false" :search-query="searchQuery" @update="(updates) => updateTodo(todo.id, updates)" @delete="deleteTodo(todo.id)" />
+          </div>
+        </div>
+      </transition>
     </div>
 
     <!-- 3. MOBILE DRAWER OVERLAY -->
@@ -1614,6 +1675,136 @@ const pinnedTodos = computed(() => {
 .top-bar { padding: 0.3rem 0.75rem; margin-bottom: 0.5rem; position: sticky; top: 0.5rem; z-index: 1000; overflow: visible; }
 .top-bar-inner { display: flex; align-items: center; gap: 0.5rem; width: 100%; min-height: 2rem; justify-content: space-between; }
 .logo-area { flex-shrink: 0; }
+
+.reload-notification {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5rem;
+  background: #2563eb;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  z-index: 99999;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  border-bottom: 2px solid rgba(255,255,255,0.2);
+}
+
+.spin-icon {
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.slide-down-enter-active, .slide-down-leave-active {
+  transition: transform 0.3s ease;
+}
+.slide-down-enter-from, .slide-down-leave-to {
+  transform: translateY(-100%);
+}
+
+.pinned-section-container {
+  position: sticky;
+  top: 3.1rem;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  width: 100%;
+}
+
+.pinned-toggle-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: -0.5rem;
+  margin-bottom: 0.1rem;
+  pointer-events: auto;
+}
+
+.pinned-toggle-btn {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  color: var(--primary);
+  min-width: 44px;
+  width: auto;
+  padding: 0 0.6rem;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.toggle-content {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pinned-count-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  opacity: 0.8;
+}
+
+
+.pinned-toggle-btn:hover, .pinned-toggle-btn.active {
+  background: var(--primary);
+  color: white;
+  height: 24px;
+}
+
+.pinned-aggregation { 
+  margin-bottom: 1rem; 
+  border-left: 4px solid var(--primary); 
+  padding: 0.5rem 0.75rem !important; 
+  background: var(--bg-card) !important; 
+  width: 100%;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  pointer-events: auto;
+}
+
+.pinned-aggregation.is-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 1.3rem; /* Adjusted to sit safely below the 20px button */
+  z-index: 10000;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 0;
+}
+
+/* Expand Transition */
+.expand-enter-active, .expand-leave-active {
+  transition: all 0.3s ease;
+  max-height: 800px;
+  overflow: hidden;
+  opacity: 1;
+}
+.expand-enter-from, .expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .logo { font-size: 0.95rem; margin: 0; line-height: 2rem; white-space: nowrap; font-weight: 800; color: var(--primary); }
 .nav-icons-group { display: flex; align-items: center; gap: 0.25rem; }
 .nav-icon-btn { background: transparent; border: none; color: #9ca3af; cursor: pointer; padding: 0.3rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
@@ -1860,10 +2051,10 @@ const pinnedTodos = computed(() => {
   border-left: 4px solid var(--primary); 
   padding: 0.5rem 0.75rem !important; 
   background: var(--bg-card) !important; 
-  position: sticky; 
-  top: 3.2rem; 
-  z-index: 999; 
+  width: 100%;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  pointer-events: auto;
 }
 @media (max-width: 768px) {
   .pinned-aggregation { top: 2.8rem; }

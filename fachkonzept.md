@@ -16,8 +16,8 @@ Die Anwendung richtet sich primär an Einzelnutzer, die eine datenschutzfreundli
 - **Löschen & Archivieren:** Aufgaben werden in ein Archiv verschoben, um die Hauptliste sauber zu halten. Aus dem Archiv können sie dauerhaft gelöscht oder wiederhergestellt werden.
 
 ### 3.2 Strukturierung & Organisation
-- **Tag-System:** Todos können mit mehreren Tags versehen werden. Eine Autovervollständigung (Suggested Tags) erleichtert die Zuweisung.
-- **Anheften (Pinning):** Wichtige Aufgaben können "angepinnt" werden. Diese werden in der regulären Liste blau hervorgehoben und zusätzlich in einer speziellen Favoriten-Aggregation am oberen Bildschirmrand angezeigt.
+- **Tag-System:** Todos können mit mehreren Tags versehen werden. Eine Autovervollständigung (Suggested Tags) erleichtert die Zuweisung. In der Filterleiste werden nur Tags angezeigt, die aktuell mindestens einer offenen Aufgabe zugewiesen sind (dynamische Bereinigung).
+- **Anheften (Pinning):** Wichtige Aufgaben können "angepinnt" werden. Diese werden in der regulären Liste blau hervorgehoben und zusätzlich in einer speziellen Favoriten-Aggregation am oberen Bildschirmrand angezeigt. Diese Aggregation ist einklappbar, um Platz zu sparen, und bietet eine Hover-Vorschau.
 - **Filterung & Suche:** 
   - Filterung nach Tags (Inklusive/Exklusive Logik).
   - Ein-/Ausblenden erledigter Aufgaben.
@@ -26,11 +26,15 @@ Die Anwendung richtet sich primär an Einzelnutzer, die eine datenschutzfreundli
 - **Sortierung:** Manuelle Sortierung per Drag-and-Drop oder automatische Sortierung nach Zieldatum. Angepinnte Aufgaben werden innerhalb ihrer Gruppen stets priorisiert.
 
 ### 3.3 Benutzeroberfläche & Interaktion (UI/UX)
-- **Sticky Navigation & Favoriten:** Die Filterleiste und die Liste der angepinnten Aufgaben bleiben beim Scrollen am oberen Rand fixiert, während die restliche Liste darunter hindurchgleitet.
+- **Sticky Navigation & Favoriten:** Die Filterleiste bleibt beim Scrollen am oberen Rand fixiert. Unter der Leiste befindet sich ein interaktiver Toggle-Button für die Favoriten-Aggregation.
+- **Kollabierbare Favoriten:** 
+  - Die Liste der angepinnten Aufgaben kann per Klick dauerhaft aus- oder eingeklappt werden (Zustand bleibt nach Refresh erhalten).
+  - Ein dezenter Counter am Toggle-Button zeigt die Anzahl der aktuell angepinnten Aufgaben an.
+  - Im eingeklappten Zustand öffnet ein Hover über den Toggle-Button eine temporäre Overlay-Ansicht, die bündig mit der Filterleiste abschließt, den restlichen Content nicht verschiebt und den Button nicht verdeckt.
 - **Dark Mode:** Ein systemweiter Dunkelmodus kann über einen minimalistischen Schalter in der Navigation aktiviert werden. Die Einstellung wird dauerhaft gespeichert.
 - **Dynamisches Title-Scaling:** Die Schriftgröße des Aufgabentitels passt sich automatisch an dessen Länge an, um ein Umbrechen zu verhindern und die Einzeiligkeit zu wahren.
 - **Truncation & Tooltips:** Sehr lange Titel werden mit "..." gekürzt. Beim Hovern erscheint sofort ein Tooltip mit dem vollständigen Text.
-- **Responsive Design:** Optimierte Darstellung für Desktop und Mobilgeräte (Hamburger-Menü, Touch-Optimierung).
+- **Responsive Design:** Optimierte Darstellung für Desktop und Mobilgeräte. Auf Smartphones wird ein besonders platzsparendes, horizontales Layout für Aufgabenzeilen verwendet, um die Informationsdichte zu erhöhen und Scrollwege zu verkürzen.
 
 ### 3.4 Statistik-Dashboard
 Ein dediziertes Dashboard bietet einen Überblick über die eigene Produktivität:
